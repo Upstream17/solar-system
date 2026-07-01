@@ -3,7 +3,6 @@
 import * as THREE from 'three';
 import { scaleScene } from './scale.js';
 import { sunGlowSprites } from './planets.js';
-import { GLOW_BASE_OPACITY } from './lighting.js';
 import { startTracking, stopTracking } from './tracking.js';
 
 const $ = id => document.getElementById(id);
@@ -60,12 +59,12 @@ export function initToggles(scene, camera, controls) {
     scene.traverse(o=>{ if (o.userData?.isLabel) o.visible = toggleLabels.checked; });
   });
 
-  // 辉光开关：tycho.ioz 风格，单一 sprite
-  const baseOp = GLOW_BASE_OPACITY;
+  // 辉光开关：双层 sprite 各自独立控制 opacity
+  const baseOps = [0.55, 0.10];  // [内层白核, 外层淡黄]
   toggleBloom.addEventListener('change', ()=>{
-    sunGlowSprites.forEach((s)=>{
+    sunGlowSprites.forEach((s, i)=>{
       s.visible = toggleBloom.checked;
-      s.material.opacity = toggleBloom.checked ? baseOp : 0;
+      s.material.opacity = toggleBloom.checked ? baseOps[i] || 0.55 : 0;
     });
   });
 }

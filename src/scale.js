@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { DIST_SCALE, SUN_R, PLANETS, MOON } from './constants.js';
 import { makeOrbit, sunGlowSprites } from './planets.js';
-import { GLOW_SCALE_RATIO } from './lighting.js';
+import { GLOW_INNER_SCALE, GLOW_OUTER_SCALE } from './lighting.js';
 
 const _orbitLines = [];
 
@@ -60,8 +60,14 @@ export function scaleScene(scene, camera, controls) {
   // 太阳几何尺寸 1.0，scale = SUN_R（=1.0，不缩放）
   sun.scale.setScalar(SUN_R / 1.0);
 
-  // 辉光：单一 sprite，scale = SUN_R × GLOW_SCALE_RATIO
-  sunGlowSprites.forEach(s => s.scale.set(SUN_R * GLOW_SCALE_RATIO, SUN_R * GLOW_SCALE_RATIO, 1));
+  // 辉光：双层 sprite
+  // 内层（紧贴太阳）+ 外层（淡黄覆盖）
+  const innerScales = GLOW_INNER_SCALE;  // 单值
+  const outerScales = GLOW_OUTER_SCALE;  // 单值
+  sunGlowSprites.forEach((s, i) => {
+    const sc = i === 0 ? innerScales : outerScales;
+    s.scale.set(SUN_R * sc, SUN_R * sc, 1);
+  });
 
   // 行星：geometry 已用 realSize 创建，无需 scale
   planetObjs.forEach(o=>{

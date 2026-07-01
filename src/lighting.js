@@ -62,8 +62,8 @@ const D_FAR   = 200;   // 80-200: 默认
  * 距离阈值也重新调整：corona 从 40-120 → 80-200（让水星距离看不到 corona）
  */
 const LAYERS = [
-  // 第一层（紧贴太阳边缘外圈，暖白）— 任何距离都显示
-  { name: 'glow',   baseScale: 1.15,  baseOpacity: 0.20, color: 0xffffff, range: [0,   30]  },
+  // 第一层（紧贴太阳边缘外圈，暖白）— 30u 外才出现（贴脸看不到，避开"糊屏"）
+  { name: 'glow',   baseScale: 1.15,  baseOpacity: 0.20, color: 0xffffff, range: [30,  80]  },
   // 第二层（外缘光晕，暖白）— 80 单位外才出现（避免水星距离糊屏）
   { name: 'corona', baseScale: 1.4,   baseOpacity: 0.18, color: 0xfff5d0, range: [80,  200] },
   // 第三层（外圈柔光，淡黄）— 200 单位外
@@ -95,7 +95,7 @@ export function makeSunGlow(sunR) {
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      depthTest: false,        // 极远处也不会被剪（确保远处仍可见）
+      depthTest: true,        // 关键：让 sprite 被水星等球体遮挡，不再穿透
       sizeAttenuation: true,
       opacity: 0,            // 初始 0，由 update() 动态设置
       toneMapped: false

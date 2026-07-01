@@ -55,7 +55,12 @@ export async function makeSun(scene) {
   const sunTex = await safeTexture('https://threejs.org/examples/textures/planets/sun.jpg', 0xffcc55);
   // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 1.0）
   const geo = new THREE.SphereGeometry(1.0, 48, 48);
-  const mat = new THREE.MeshBasicMaterial({ map: sunTex });
+  // 修复 #3: 太阳偏暗问题 — 用亮黄色 + 提亮 texture + toneMapped:false 让太阳保持亮色不被压暗
+  const mat = new THREE.MeshBasicMaterial({
+    map: sunTex,
+    color: 0xffeeaa,  // 暖黄色叠加
+    toneMapped: false  // 不参与 tone mapping（保持最亮）
+  });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.userData = { isSun:true, name:'太阳', size:SUN_R, type:'恒星 G2V 型 · 黄矮星',
     facts:{ diameter:'1,392,700 km', mass:'1.99×10³⁰ kg', age:'46 亿年',
@@ -64,7 +69,8 @@ export async function makeSun(scene) {
   scene.add(mesh);
 
   // 辉光（tycho.ioz 风格：单一 sprite，整体小而透明）
-  const glow = makeGlowSprite('rgba(255,220,150,1.0)', SUN_R * GLOW_SCALE_RATIO, GLOW_BASE_OPACITY);
+  // 修复 #3: 辉光从暖黄色改为更亮更白的颜色 — 看上去更亮
+  const glow = makeGlowSprite('rgba(255,240,200,1.0)', SUN_R * GLOW_SCALE_RATIO, GLOW_BASE_OPACITY);
   mesh.add(glow);
   sunGlowSprites.push(glow);
 

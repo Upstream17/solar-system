@@ -58,7 +58,7 @@ async function init() {
     initToggles(scene, camera, controls);
     bindStarsToggle(stars);
     initInfoPanel();
-    initTracking(camera, controls);
+    initTracking(camera, controls, renderer);
     initTrackingStopButton();
 
     // 9. 点击交互（行星列表）

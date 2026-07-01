@@ -1,36 +1,115 @@
-/* tracking.js — 焦点模式系统
+/* tracking.js — 持续追踪系统
  *
- * 设计哲学（tycho.ioz 风格）：
- *   - 点击星球/图例 = 一次 animateCamera 飞到目标附近 + 进入"焦点模式"
- *   - 焦点模式下 target 锁定到目标（自动跟随公转），但 camera.position 完全由 OrbitControls 管理
- *   - 用户可以自由缩放/旋转/平移
- *   - 再次点击同一目标 或 ESC 或徽章按钮 = 退出焦点模式
- *   - 这是 OrbitControls 唯一能正常工作的方案 — 每帧强行覆盖 camera.position 会彻底破坏 OrbitControls 内部状态
+ * 设计：
+ *   - 追踪时禁用 OrbitControls，自己实现相机控制
+ *   - cameraOffset = 球坐标 (radius, theta, phi)，表示相机相对 target 的偏移
+ *   - 滚轮改 radius（缩放）
+ *   - 鼠标拖拽改 theta/phi（旋转）
+ *   - target 跟着目标平滑移动
+ *   - 退出追踪时恢复 OrbitControls
+ *
+ * 优势：
+ *   - 用户在追踪时可以自由缩放/旋转，不会被 OrbitControls 内部状态干扰
+ *   - 相机永远聚焦在目标上，目标不会"飞出视野"
  */
 
 import * as THREE from 'three';
 import { getSunDisplayRadius, getPlanetDisplayRadius } from './scale.js';
 
-let focusTarget = null;  // 当前焦点目标（不等于"持续追踪"）
+let focusTarget = null;
 let camAnim = null;
-let _camera, _controls;
+let _camera, _controls, _renderer;
 
-export function initTracking(camera, controls) {
+let _isUserInteracting = false;
+let _lastPointer = { x: 0, y: 0 };
+let _spherical = new THREE.Spherical();  // 相机相对 target 的球坐标
+let _targetWorldPos = new THREE.Vector3();  // 缓存的 target 位置
+
+/* 球坐标转笛卡尔偏移 */
+function sphericalToOffset(sph) {
+  return new THREE.Vector3(
+    sph.radius * Math.sin(sph.phi) * Math.sin(sph.theta),
+    sph.radius * Math.cos(sph.phi),
+    sph.radius * Math.sin(sph.phi) * Math.cos(sph.theta)
+  );
+}
+
+/* 笛卡尔偏移转球坐标 */
+function offsetToSpherical(offset) {
+  return new THREE.Spherical().setFromVector3(offset);
+}
+
+export function initTracking(camera, controls, renderer) {
   _camera = camera;
   _controls = controls;
+  _renderer = renderer;
+}
+
+/* 鼠标事件：当焦点模式下，禁用 OrbitControls，自己处理 */
+function onPointerDown(e) {
+  if (!focusTarget) return;
+  if (e.button !== 0 && e.button !== 2) return;  // 只响应左/右键
+  e.preventDefault();
+  _isUserInteracting = true;
+  _lastPointer.x = e.clientX;
+  _lastPointer.y = e.clientY;
+}
+function onPointerMove(e) {
+  if (!_isUserInteracting) return;
+  const dx = e.clientX - _lastPointer.x;
+  const dy = e.clientY - _lastPointer.y;
+  _lastPointer.x = e.clientX;
+  _lastPointer.y = e.clientY;
+
+  // 旋转：theta 水平, phi 垂直
+  const ROTATE_SPEED = 0.005;
+  _spherical.theta -= dx * ROTATE_SPEED;
+  _spherical.phi   -= dy * ROTATE_SPEED;
+  // 限制 phi 避免翻转
+  _spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, _spherical.phi));
+}
+function onPointerUp() {
+  _isUserInteracting = false;
+}
+function onWheel(e) {
+  if (!focusTarget) return;
+  e.preventDefault();
+  // 滚轮缩放：deltaY 正数 = 远离，负数 = 拉近
+  const ZOOM_SPEED = 0.0015;
+  _spherical.radius *= 1 + e.deltaY * ZOOM_SPEED;
+  // 限制范围：0.3（贴脸）~ 8000（远观）
+  _spherical.radius = Math.max(0.3, Math.min(8000, _spherical.radius));
+}
+
+function onContextMenu(e) {
+  if (focusTarget) e.preventDefault();  // 焦点模式禁用右键菜单
+}
+
+/* 鼠标事件绑定（initTracking 时调一次） */
+let _eventsBound = false;
+function bindEvents() {
+  if (_eventsBound) return;
+  _eventsBound = true;
+  const dom = _renderer.domElement;
+  dom.addEventListener('pointerdown', onPointerDown);
+  dom.addEventListener('pointermove', onPointerMove);
+  dom.addEventListener('pointerup', onPointerUp);
+  dom.addEventListener('pointercancel', onPointerUp);
+  dom.addEventListener('wheel', onWheel, { passive: false });
+  dom.addEventListener('contextmenu', onContextMenu);
 }
 
 export function getFocusTarget() { return focusTarget; }
 export function getCamAnim() { return camAnim; }
 
-/** 设置焦点（点击星球/图例）— 触发飞行动画 + 进入焦点模式 */
-export function startTracking(mesh, withFocus=true) {
-  // 再次点同一目标 → 取消焦点
+/** 设置焦点（点击星球/图例） */
+export function startTracking(mesh, withFocus = true) {
   if (focusTarget === mesh) {
     stopTracking();
     return;
   }
   focusTarget = mesh;
+  bindEvents();
   updateTrackingBadge();
   updateLegendHighlight();
   if (withFocus) focusOn(mesh);
@@ -40,39 +119,13 @@ export function startTracking(mesh, withFocus=true) {
 export function stopTracking() {
   if (!focusTarget) return;
   focusTarget = null;
+  // 把控制权还回 OrbitControls
+  _controls.enabled = true;
   updateTrackingBadge();
   updateLegendHighlight();
 }
 
-/** 切换到不同目标 */
-export function switchToTarget(mesh) {
-  focusTarget = mesh;
-  updateTrackingBadge();
-  updateLegendHighlight();
-  focusOn(mesh);
-}
-
-function updateTrackingBadge() {
-  const badge = document.getElementById('tracking-badge');
-  if (focusTarget) {
-    document.getElementById('tracking-name').textContent = focusTarget.userData.name;
-    badge.classList.add('show');
-  } else {
-    badge.classList.remove('show');
-  }
-}
-
-function updateLegendHighlight() {
-  document.querySelectorAll('#legend .item').forEach(el=>{
-    if (focusTarget && el.dataset.name === focusTarget.userData.name) {
-      el.classList.add('tracking');
-    } else {
-      el.classList.remove('tracking');
-    }
-  });
-}
-
-/** 飞到目标附近（一次性动画，不持续追踪） */
+/* 飞到目标附近（一次性动画） */
 function focusOn(mesh) {
   const info = mesh.userData.isSun
     ? mesh.userData
@@ -84,23 +137,32 @@ function focusOn(mesh) {
     ? getSunDisplayRadius()
     : getPlanetDisplayRadius(mesh.userData.data);
 
-  // 相机距离 = max(行星半径 × 12, 8) — 看全行星
-  const offset = Math.max(displayR * 12, 8);
-  const target = wp.clone().add(new THREE.Vector3(offset, offset*0.4, offset*0.7));
-  animateCamera(target, wp);
+  // 相机距离 = 行星半径 × 10-20 倍（让用户能看清全行星）
+  const offset = Math.max(displayR * 15, 8);
+  const target = wp.clone().add(new THREE.Vector3(offset, offset * 0.4, offset * 0.7));
+  animateCamera(target, wp, offset);
 }
 
-function animateCamera(toPos, toTarget) {
+function animateCamera(toPos, toTarget, expectedOffset) {
+  // 焦点模式：动画结束后初始化 spherical（让用户立即能滚轮缩放）
   camAnim = {
     fromPos: _camera.position.clone(),
     toPos,
     fromTarget: _controls.target.clone(),
     toTarget,
-    t: 0
+    t: 0,
+    expectedOffset,  // 动画结束后相机的 spherical.radius
+    postAction: () => {
+      // 动画结束后：禁用 OrbitControls，记录当前 offset 为 spherical
+      _controls.enabled = false;
+      const offsetVec = _camera.position.clone().sub(_controls.target);
+      _spherical = offsetToSpherical(offsetVec);
+      _targetWorldPos.copy(_controls.target);
+    }
   };
 }
 
-/** 主循环里调用：推进相机动画 */
+/** 主循环：推进相机动画 */
 export function tickCameraAnim(deltaReal) {
   if (camAnim) {
     camAnim.t += deltaReal * 1.5;
@@ -108,25 +170,48 @@ export function tickCameraAnim(deltaReal) {
     const e = t < 0.5 ? 2*t*t : -1 + (4-2*t)*t;
     _camera.position.lerpVectors(camAnim.fromPos, camAnim.toPos, e);
     _controls.target.lerpVectors(camAnim.fromTarget, camAnim.toTarget, e);
-    if (t >= 1) camAnim = null;
+    if (t >= 1) {
+      if (camAnim.postAction) camAnim.postAction();
+      camAnim = null;
+    }
   }
 }
 
-/** 主循环里调用：焦点模式下锁定 target 到目标
- *  注意：target 平滑跟随（target.lerp），但 camera.position 完全不动
- *  这样 OrbitControls 内部状态完好 — 用户缩放/旋转完全自由
- *  视觉效果：相机聚焦在目标周围旋转/缩放，但 target 不会"飘走"
- */
+/** 主循环：焦点模式 + 自由控制 */
 export function tickTracking() {
-  if (focusTarget) {
-    const targetPos = focusTarget.getWorldPosition(new THREE.Vector3());
-    // 用更高的 lerp 系数 (0.2) 让 target 紧跟目标，避免目标移出视野
-    _controls.target.lerp(targetPos, 0.2);
-    // 不动 camera.position！
+  if (focusTarget && !camAnim) {
+    // 1. target 跟随目标
+    const targetPos = focusTarget.getWorldPosition(_targetWorldPos);
+    _controls.target.copy(targetPos);
+
+    // 2. 相机位置 = target + offset（由用户滚轮/拖拽控制的 spherical）
+    const offset = sphericalToOffset(_spherical);
+    _camera.position.copy(_controls.target).add(offset);
   }
 }
 
-/* ESC 退出焦点模式 */
-addEventListener('keydown', (e)=>{
+/* 焦点模式：禁用 OrbitControls（仅在非交互时） */
+function updateTrackingBadge() {
+  const badge = document.getElementById('tracking-badge');
+  if (focusTarget) {
+    document.getElementById('tracking-name').textContent = focusTarget.userData.name;
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
+}
+
+function updateLegendHighlight() {
+  document.querySelectorAll('#legend .item').forEach(el => {
+    if (focusTarget && el.dataset.name === focusTarget.userData.name) {
+      el.classList.add('tracking');
+    } else {
+      el.classList.remove('tracking');
+    }
+  });
+}
+
+/* ESC 退出 */
+addEventListener('keydown', (e) => {
   if (e.key === 'Escape') stopTracking();
 });

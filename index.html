@@ -210,25 +210,23 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
    ============================================================ */
 const AU = 14;
 
-// 演示模式太阳半径（适中偏大，视觉好看）
-// 水星演示距离 = 0.39 * 14 * 0.6 ≈ 3.28，太阳 1.6 → 安全边距 ~1.7，水星不穿模
-const SUN_DEMO = 1.6;
+// ===== 演示模式 =====
+// 太阳偏小（保证水星不穿模），行星用 data.size（艺术夸张值）
+const SUN_DEMO = 1.5;
 
-// 真实模式：所有尺寸用 sqrt 对数压缩，相对比例正确
-// sqrt(realSize) 把太阳 109 → 10.4、地球 1 → 1、木星 11.2 → 3.35
-//   → 视觉上太阳远大于木星（演示模式太阳=木星，真实模式太阳≈10×木星，符合常识）
-// 距离同样 sqrt 压缩：sqrt(AU) * AU_DIST_SCALE
-//   水星 sqrt(0.39)*8 = 5.0
-//   地球 sqrt(1.0)*8 = 8.0
-//   海王星 sqrt(30.05)*8 = 43.8
-//   → 比例正确（海王星轨道≈5.5×地球轨道），距离感对
-const REAL_SCALE = 1.5;          // 真实模式大小缩放（sqrt 后的总系数）
-const AU_DIST_SCALE = 8;         // 真实模式距离缩放
-const SUN_REAL = Math.sqrt(109) * REAL_SCALE;  // ≈ 15.7，演示模式 1.6 → 真实模式 10× 大
-
-// 演示模式距离压缩比：保证最内圈行星（水星 0.39AU）轨道 ≥ 太阳半径 × 2
-// 0.39 * 14 * DEMO_DIST_FACTOR >= SUN_DEMO * 2 = 3.2 → DEMO_DIST_FACTOR >= 0.586
-const DEMO_DIST_FACTOR = 0.6;
+// ===== 真实模式 =====
+// 太阳看上去"有数百万地球那么大"（相对比例夸张）：
+//   太阳半径 = 4.0，最大行星半径 clip 到太阳 60% = 2.4
+//   木星 11.2 × 0.18 = 2.02 → 太阳 1.98× 木星 ✅
+//   地球 1.0 × 0.18 = 0.18 → 太阳 22× 地球 ✅
+//   水星 0.383 × 0.18 = 0.07 → clip 到 0.22 最小可见尺寸
+// 距离按真实 AU 比例：DIST_SCALE_REAL = 12
+//   水星 0.39*12 = 4.68 → 太阳 4.0 + 水星 0.22 = 4.22 < 4.68 ✅
+//   海王星 30.05*12 = 360.6 → 距离比例 30× 真实 ✅
+const SUN_REAL = 4.0;
+const PLANET_LINEAR_SCALE = 0.18;  // 真实模式：行星 = realSize × scale
+const MIN_PLANET_RADIUS = 0.22;    // 真实模式最小可视尺寸
+const DIST_SCALE_REAL = 12;        // 真实模式距离缩放（每 AU = 12 世界单位）
 
 const PLANETS = [
   {
@@ -593,13 +591,14 @@ let realistic = false;
 const _orbitLines = [];
 
 /** 演示/真实模式下的尺寸计算
- *  演示模式：用 data.size（视觉夸张值）
- *  真实模式：sqrt(realSize) * REAL_SCALE（log 压缩，相对比例正确）
- *           最小 0.15（避免水星完全看不见）
+ *  演示模式：data.size（艺术夸张值，水星 0.42 → 看见）
+ *  真实模式：realSize × PLANET_LINEAR_SCALE（地球 0.18），最小 MIN_PLANET_RADIUS
+ *           最大 clip 到太阳 60%（避免吞掉木星/土星）
  */
 function getPlanetDisplayRadius(p) {
   if (realistic) {
-    return Math.max(0.15, Math.sqrt(p.realSize) * REAL_SCALE);
+    const r = Math.max(MIN_PLANET_RADIUS, p.realSize * PLANET_LINEAR_SCALE);
+    return Math.min(r, SUN_REAL * 0.6);
   } else {
     return p.size;
   }
@@ -609,10 +608,11 @@ function getSunDisplayRadius() {
 }
 function getDisplayDistance(p) {
   if (realistic) {
-    // sqrt 压缩：水星 0.39AU → 5.0，地球 1.0AU → 8.0，海王星 30.05AU → 43.8
-    return Math.sqrt(p.distance / AU) * AU_DIST_SCALE;
+    // 真实模式：按 AU 比例，水星 0.39AU → 4.68，海王星 30.05AU → 360.6
+    return p.distance / AU * DIST_SCALE_REAL;
   } else {
-    return p.distance * DEMO_DIST_FACTOR;
+    // 演示模式：水星 0.39*14 = 5.46，乘 0.6 = 3.28，太阳 1.5 → 边距 1.78 ✅
+    return p.distance * 0.6;
   }
 }
 
@@ -654,28 +654,30 @@ function scaleScene(){
   if (moon) {
     const earth = planetObjs[2];
     const earthRadius = getPlanetDisplayRadius(earth.data);
-    const moonTarget = realistic ? Math.sqrt(MOON.realSize) * REAL_SCALE
+    // 真实模式月球 = realSize × scale，最小 0.1；演示模式 = MOON.size
+    const moonTarget = realistic ? Math.max(0.1, MOON.realSize * PLANET_LINEAR_SCALE * 0.85)
                                   : MOON.size;
     moon.mesh.scale.setScalar(moonTarget / MOON.size);
-    // 月球距离相对地球：演示模式保持原始 MOON.distance 比例，真实模式用相对尺寸
+    // 月球距离：演示模式保持 MOON.distance 比例；真实模式 = 地球半径 × 4（视觉可见）
     const moonDist = realistic ? earthRadius * 4.0 : MOON.distance * (earthRadius / earth.data.size);
     moon.mesh.position.set(moonDist, 0, 0);
   }
 
   regenerateOrbits();
 
-  // 切换时智能调整相机
-  const maxR = getDisplayDistance(PLANETS[PLANETS.length-1]);
+  // 切换时智能调整相机（让用户能看到有意义的场景）
+  const neptuneDist = getDisplayDistance(PLANETS[PLANETS.length-1]);
   const camDist = camera.position.distanceTo(controls.target);
   if (realistic) {
-    // 进入真实模式：拉远到能看全太阳系
-    if (camDist < maxR * 0.6) {
-      camera.position.set(0, maxR*0.45, maxR*0.7);
+    // 进入真实模式：相机默认拉到能看见外圈行星（海王星 360），但保留用户手动调节
+    // 如果当前相机离太阳 < 海王星轨道 60%，说明还停留在演示模式视角，自动拉远
+    if (camDist < neptuneDist * 0.6) {
+      camera.position.set(0, neptuneDist*0.4, neptuneDist*0.7);
       controls.target.set(0,0,0);
     }
   } else {
-    // 退出真实模式：拉近一些
-    if (camDist > maxR * 1.5) {
+    // 退出真实模式：拉近演示模式视图（看太阳系全貌）
+    if (camDist > neptuneDist * 2) {
       camera.position.set(0, 40, 80);
       controls.target.set(0,0,0);
     }

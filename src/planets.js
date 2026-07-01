@@ -56,7 +56,7 @@ export const sunGlowSprites = [];
 
 /* ===== 太阳 ===== */
 export async function makeSun(scene) {
-  const sunTex = await safeTexture('https://threejs.org/examples/textures/planets/sun.jpg', 0xffcc55);
+  const sunTex = await safeTexture('https://threejs.org/examples/textures/planets/sun.jpg', 'sun');
   // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 1.0）
   const geo = new THREE.SphereGeometry(1.0, 48, 48);
   // 修复 #3: 太阳偏暗问题 — 用亮黄色 + 提亮 texture + toneMapped:false 让太阳保持亮色不被压暗
@@ -86,7 +86,10 @@ export async function makeSun(scene) {
 
 /* ===== 行星 ===== */
 export async function makePlanet(scene, p) {
-  const tex = await safeTexture(p.texture, p.color);
+  // 行星名 → 程序化纹理名
+  const texName = { '水星':'mercury', '金星':'venus', '地球':'earth', '火星':'mars',
+                    '木星':'jupiter', '土星':'saturn', '天王星':'uranus', '海王星':'neptune' }[p.name] || 'earth';
+  const tex = await safeTexture(p.texture, texName);
   // 几何尺寸 = realSize（地球 = 1.0），与真实比例一致
   const geo = new THREE.SphereGeometry(p.realSize, 48, 48);
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:0.85, metalness:0.05,
@@ -94,7 +97,7 @@ export async function makePlanet(scene, p) {
     emissiveIntensity: 0.05
   });
   if (p.bumpMap) {
-    const bump = await safeTexture(p.bumpMap, 0x808080);
+    const bump = await safeTexture(p.bumpMap, texName);
     mat.bumpMap = bump;
     mat.bumpScale = 0.04;
   }
@@ -138,7 +141,7 @@ export async function makePlanet(scene, p) {
 
 /* ===== 月球 ===== */
 export async function makeMoon() {
-  const tex = await safeTexture(MOON.texture, 0xaaaaaa);
+  const tex = await safeTexture(MOON.texture, 'moon');
   // 几何尺寸 = MOON.size（演示值 0.18，明显小于地球 1.0）
   const geo = new THREE.SphereGeometry(MOON.size, 32, 32);
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:1,

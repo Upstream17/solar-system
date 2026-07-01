@@ -188,14 +188,16 @@ export function proceduralTexture(name, size = 512) {
   }
 }
 
-/** 加载纹理，失败 fallback 到对应行星的程序化纹理 */
-export function safeTexture(url, fallbackName) {
+/** 加载纹理，失败 fallback 到对应行星的程序化纹理
+ * — onProgress(label) 在 texture 成功（或 fallback）时调用一次
+ */
+export function safeTexture(url, fallbackName, onProgress) {
   return new Promise((resolve) => {
     texLoader.load(
       url,
-      (tex) => { tex.colorSpace = THREE.SRGBColorSpace; resolve(tex); },
+      (tex) => { tex.colorSpace = THREE.SRGBColorSpace; resolve(tex); onProgress?.(fallbackName); },
       undefined,
-      () => { resolve(proceduralTexture(fallbackName)); console.warn('Texture 404, using procedural fallback for:', url); }
+      () => { resolve(proceduralTexture(fallbackName)); onProgress?.(fallbackName); console.warn('Texture 404, using procedural fallback for:', url); }
     );
   });
 }

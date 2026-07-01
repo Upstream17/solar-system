@@ -4,6 +4,10 @@ import * as THREE from 'three';
 import { SUN_R, PLANETS, MOON } from './constants.js';
 import { safeTexture } from './textures.js';
 import { makeSunGlow } from './lighting.js';
+import { tick as loaderTick } from './loader.js';
+
+// 进度回调：每个纹理加载完调用一次，让 loader 显示 "X / N"
+const onLoaderTick = (label) => loaderTick(label);
 
 /* 文字标签（Canvas 渲染 → Sprite） */
 function makeTextSprite(text, color='#9bd0ff') {
@@ -54,7 +58,7 @@ export const sunGlowSprites = [];
 
 /* ===== 太阳 ===== */
 export async function makeSun(scene) {
-  const sunTex = await safeTexture('./src/textures/sun.jpg', 'sun');
+  const sunTex = await safeTexture('./src/textures/sun.jpg', 'sun', onLoaderTick);
   // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 12.0）
   const geo = new THREE.SphereGeometry(1.0, 64, 64);
   // 太阳本体：温和暖白（G2V 真实颜色）— 亮度由 toneMapped:false + bloom 维持，不靠颜色
@@ -93,7 +97,7 @@ export async function makePlanet(scene, p) {
   // 行星名 → 程序化纹理名
   const texName = { '水星':'mercury', '金星':'venus', '地球':'earth', '火星':'mars',
                     '木星':'jupiter', '土星':'saturn', '天王星':'uranus', '海王星':'neptune' }[p.name] || 'earth';
-  const tex = await safeTexture(p.texture, texName);
+  const tex = await safeTexture(p.texture, texName, onLoaderTick);
   // 几何尺寸 = realSize（地球 = 1.0），与真实比例一致
   const geo = new THREE.SphereGeometry(p.realSize, 48, 48);
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:0.85, metalness:0.05,
@@ -101,7 +105,7 @@ export async function makePlanet(scene, p) {
     emissiveIntensity: 0.05
   });
   if (p.bumpMap) {
-    const bump = await safeTexture(p.bumpMap, texName);
+    const bump = await safeTexture(p.bumpMap, texName, onLoaderTick);
     mat.bumpMap = bump;
     mat.bumpScale = 0.04;
   }
@@ -136,7 +140,7 @@ export async function makePlanet(scene, p) {
     // 有 ringTexture 用贴图；没有 fallback 纯色（向后兼容）
     let ringMap = null;
     if (p.ringTexture) {
-      ringMap = await safeTexture(p.ringTexture, p.name === '土星' ? 'saturn_ring' : 'uranus_ring');
+      ringMap = await safeTexture(p.ringTexture, p.name === '土星' ? 'saturn_ring' : 'uranus_ring', onLoaderTick);
     }
     const ringMat = new THREE.MeshBasicMaterial({
       map: ringMap || null,
@@ -153,7 +157,7 @@ export async function makePlanet(scene, p) {
   // 地球云层（独立 sprite — 降透明度 + noise displacement 避免塑料贴图感）
   // 关键：opacity 0.55 → 0.35（与海陆融合），displacement 让云朵有"凸起感"而非平贴
   if (p.cloudsTexture) {
-    const cloudsTex = await safeTexture(p.cloudsTexture, 'earth_clouds');
+    const cloudsTex = await safeTexture(p.cloudsTexture, 'earth_clouds', onLoaderTick);
     const cloudsGeo = new THREE.SphereGeometry(p.realSize * 1.018, 64, 64);
     // 顶点 displacement — 用噪声让云层表面起伏（凸起的云团比平贴真实）
     const posAttr = cloudsGeo.attributes.position;
@@ -182,7 +186,7 @@ export async function makePlanet(scene, p) {
 
 /* ===== 月球 ===== */
 export async function makeMoon() {
-  const tex = await safeTexture(MOON.texture, 'moon');
+  const tex = await safeTexture(MOON.texture, 'moon', onLoaderTick);
   // 几何尺寸 = MOON.size（演示值 0.18，明显小于地球 1.0）
   const geo = new THREE.SphereGeometry(MOON.size, 32, 32);
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:1,

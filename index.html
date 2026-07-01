@@ -3,200 +3,632 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>🌌 太阳系 3D 探索器 · Three.js</title>
+<title>SOLAR SYSTEM · Three.js</title>
+
+<!-- SpaceX 风字体 + 图标 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+
 <style>
-  html, body { margin:0; padding:0; overflow:hidden; width:100%; height:100%; background:#000; color:#fff;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
-  #app { position:fixed; inset:0; }
-  canvas { display:block; }
+  /* ==========================================================
+   * Tokens（颜色 / 间距 / 字体 单一来源 — 改一处全局生效）
+   * ========================================================== */
+  :root {
+    --bg:          #02050a;
+    --bg-soft:     #060c18;
+    --panel:       rgba(8, 14, 28, 0.72);
+    --panel-border:rgba(120, 170, 255, 0.10);
+    --text:        #e8edf5;
+    --text-mid:    #aab;
+    --text-dim:    #5a6478;
+    --accent:      #7eb6ff;
+    --accent-dim:  #4d8fff;
+    --warn:        #ff4747;
+    --ok:          #4ade80;
 
-  /* ===== 顶部标题栏 ===== */
-  #titlebar {
-    position:absolute; top:14px; left:50%; transform:translateX(-50%);
-    padding:8px 18px; background:rgba(8,12,30,0.55);
-    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border:1px solid rgba(120,160,255,0.25); border-radius:30px;
-    font-size:14px; letter-spacing:2px; pointer-events:none;
-    box-shadow:0 0 30px rgba(80,140,255,0.15);
-  }
-  #titlebar b { color:#9bd0ff; }
+    --font-body:   'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    --font-mono:   'JetBrains Mono', ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* ===== 左上控制面板 ===== */
-  #controls {
-    position:absolute; top:70px; left:14px; padding:12px 14px;
-    background:rgba(8,12,30,0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border:1px solid rgba(120,160,255,0.2); border-radius:12px;
-    font-size:12.5px; min-width:240px; line-height:1.8;
-    box-shadow:0 0 25px rgba(80,140,255,0.1);
-  }
-  #controls h3 { margin:0 0 8px 0; font-size:13px; color:#9bd0ff; letter-spacing:1px;
-    border-bottom:1px solid rgba(120,160,255,0.2); padding-bottom:6px;}
-  #controls label { display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
-  #controls label:hover { color:#9bd0ff; }
-  #controls input[type=range] { width:100%; accent-color:#9bd0ff; cursor:pointer; }
-  #controls input[type=checkbox] { accent-color:#9bd0ff; cursor:pointer; }
-  #controls .slider-row { margin: 8px 0; }
-  #controls .slider-row .slider-head {
-    display:flex; justify-content:space-between; align-items:center;
-    font-size:11.5px; color:#aac; margin-bottom:3px;
-  }
-  #controls .slider-row .slider-head b { color:#9bd0ff; font-weight:normal; }
-  .speed-ticks {
-    display:flex; justify-content:space-between; font-size:9.5px; color:#668;
-    margin-top:2px; padding:0 2px;
+    --radius:      10px;
+    --radius-lg:   16px;
+    --shadow-glow: 0 0 24px rgba(126,182,255,0.10);
+    --ease:        cubic-bezier(0.4, 0, 0.2, 1);
+    --t-fast:      150ms;
+    --t-norm:      250ms;
   }
 
-  /* ===== 右下行星图例 ===== */
-  #legend {
-    position:absolute; bottom:14px; right:14px; padding:10px 12px;
-    background:rgba(8,12,30,0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border:1px solid rgba(120,160,255,0.2); border-radius:12px;
-    font-size:12px; max-width:220px; line-height:1.7;
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  #legend h4 { margin:0 0 6px 0; font-size:12px; color:#9bd0ff; letter-spacing:1px; }
-  #legend .item { display:flex; align-items:center; gap:6px; cursor:pointer; padding:1px 4px; border-radius:4px; }
-  #legend .item:hover { background:rgba(155,208,255,0.15); }
-  #legend .item.tracking { background:rgba(155,208,255,0.28); border-left:2px solid #9bd0ff; padding-left:2px; }
-  #legend .dot { width:10px; height:10px; border-radius:50%; box-shadow:0 0 6px currentColor;}
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
 
-  /* ===== 星球信息面板 ===== */
+  /* ==========================================================
+   * 通用面板系统 — 所有可折叠面板共享同一套 .panel 样式
+   * ========================================================== */
+  .panel {
+    position: absolute;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: var(--shadow-glow);
+    transition:
+      transform var(--t-norm) var(--ease),
+      opacity var(--t-fast) var(--ease);
+    z-index: 100;
+  }
+
+  /* panel header (可点击折叠) */
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--text-mid);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    border-bottom: 1px solid transparent;
+    transition: color var(--t-fast);
+  }
+  .panel-header:hover { color: var(--accent); }
+  .panel-header .title { display: flex; align-items: center; gap: 8px; }
+  .panel-header .title::before {
+    content: '';
+    display: inline-block;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .panel-header .chevron {
+    transition: transform var(--t-norm) var(--ease);
+    opacity: 0.6;
+  }
+  .panel.collapsed .panel-header .chevron { transform: rotate(-90deg); }
+  .panel.collapsed .panel-body { display: none; }
+
+  /* panel body — 内容区 */
+  .panel-body {
+    padding: 14px;
+    overflow: hidden;
+  }
+
+  /* 折叠时整个面板变成窄按钮：宽度 = 标题宽度（含 chevron + padding） */
+  .panel.collapsed .panel-body { display: none; }
+
+  /* ==========================================================
+   * 底部 Dock（控制台 + 图例 + 操作 — 多个 panel 横向排列）
+   * ========================================================== */
+  #dock {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    z-index: 100;
+    pointer-events: none;  /* Dock 整体不接收事件，交给子 panel */
+  }
+  #dock .panel { pointer-events: auto; position: relative; }
+
+  /* Dock 子项高度对齐展开时 = body 自然高度 */
+  #dock #panel-controls { min-width: 280px; }
+  #dock #panel-legend   { min-width: 200px; max-width: 220px; }
+
+  /* Dock 模式下折叠：只保留 header（细胶囊） */
+  .dock-collapsed-flag { display: none; }
+  #dock .panel.collapsed {
+    width: auto;
+    min-width: 0;
+  }
+  #dock .panel.collapsed .panel-header {
+    border-bottom: none;
+    padding: 8px 12px;
+  }
+  #dock .panel.collapsed .panel-header .title::before {
+    /* 折叠后只显示小点 */
+    width: 6px; height: 6px;
+  }
+
+  /* 特别：图例 dock 折叠后只显示 🌌SOLAR 点 */
+  #dock #panel-legend.collapsed .panel-header { padding: 8px 14px; }
+
+  /* ==========================================================
+   * Info Panel — 右侧抽屉（点击星球时弹出，不在同一 dock）
+   * ========================================================== */
   #info-panel {
-    position:absolute; top:70px; right:14px; width:290px; max-height:78vh; overflow-y:auto;
-    background:rgba(8,12,30,0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    border:1px solid rgba(120,160,255,0.3); border-radius:14px; padding:14px 16px;
-    font-size:13px; line-height:1.7; display:none;
-    box-shadow:0 0 40px rgba(80,140,255,0.25);
-    animation:slideIn .25s ease-out;
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 320px;
+    max-height: calc(100vh - 28px);
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: var(--shadow-glow);
+    overflow: hidden;
+    display: none;
+    z-index: 110;
+    font-family: var(--font-body);
+    animation: slideInR 0.25s var(--ease);
   }
-  #info-panel.show { display:block; }
-  @keyframes slideIn { from {opacity:0; transform:translateX(20px);} to {opacity:1; transform:translateX(0);} }
-  #info-panel h2 { margin:0 0 4px 0; font-size:18px; letter-spacing:2px; }
-  #info-panel .subtitle { color:#9bd0ff; font-size:11.5px; letter-spacing:1px; margin-bottom:10px; }
-  #info-panel .data-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; margin:10px 0; }
-  #info-panel .data-grid .k { color:#88a; font-size:11px; }
-  #info-panel .data-grid .v { font-size:12.5px; color:#fff; }
+  #info-panel.show { display: block; }
+  @keyframes slideInR { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  #info-panel .panel-header { border-bottom: 1px solid var(--panel-border); }
+  #info-panel .panel-body { padding: 16px; max-height: calc(100vh - 80px); overflow-y: auto; }
+  #info-panel h2 {
+    margin: 0 0 2px 0;
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 400;
+    letter-spacing: 4px;
+    color: var(--text);
+  }
+  #info-panel .subtitle {
+    color: var(--accent);
+    font-size: 10.5px;
+    letter-spacing: 2px;
+    margin-bottom: 14px;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+  }
+  #info-panel .data-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 14px;
+    margin: 12px 0;
+  }
+  #info-panel .data-grid .k {
+    color: var(--text-dim);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    font-family: var(--font-mono);
+  }
+  #info-panel .data-grid .v {
+    font-size: 13px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
   #info-panel .fact {
-    margin-top:10px; padding:9px 11px;
-    background:rgba(155,208,255,0.07); border-left:3px solid #9bd0ff; border-radius:4px;
-    font-size:12.5px; line-height:1.65;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-left: 2px solid var(--accent);
+    background: rgba(126, 182, 255, 0.04);
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--text-mid);
+    border-radius: 0 4px 4px 0;
   }
-  #info-panel .fact b { color:#9bd0ff; }
-  #info-panel .close { position:absolute; top:8px; right:12px; cursor:pointer; font-size:18px; color:#88a; }
-  #info-panel .close:hover { color:#fff; }
+  #info-panel .fact b { color: var(--accent); font-weight: 500; }
 
-  /* ===== 追踪徽章（含停止按钮） ===== */
+  /* ==========================================================
+   * Tracking 浮条 — 左下角（不在 dock 也不在 title bar）
+   * ========================================================== */
   #tracking-badge {
-    position:absolute; top:14px; left:50%; transform:translateX(-50%); margin-top:50px;
-    padding:5px 8px 5px 14px; background:rgba(155,208,255,0.18); backdrop-filter:blur(8px);
-    border:1px solid rgba(155,208,255,0.3); border-radius:16px;
-    font-size:12px; color:#9bd0ff; letter-spacing:1px;
-    display:none; align-items:center; gap:8px;
-    transition:opacity .3s;
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 8px 10px 16px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    z-index: 100;
+    box-shadow: var(--shadow-glow);
   }
-  #tracking-badge.show { display:inline-flex; }
+  #tracking-badge.show { display: inline-flex; }
+  #tracking-badge .pulse {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(0.8); }
+  }
+  #tracking-badge .target-name { color: var(--text); margin: 0 6px; }
+  #tracking-badge .esc-hint { color: var(--text-dim); font-size: 9.5px; }
   #tracking-badge .stop-btn {
-    background:rgba(255,100,100,0.25); border:1px solid rgba(255,120,120,0.4);
-    color:#fff; border-radius:10px; padding:2px 9px; font-size:11px; cursor:pointer;
-    transition:all .15s;
+    background: transparent;
+    border: 1px solid rgba(255, 71, 71, 0.4);
+    color: #ff8888;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 10.5px;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    transition: all var(--t-fast);
   }
-  #tracking-badge .stop-btn:hover { background:rgba(255,100,100,0.5); }
-  #tracking-badge .esc-hint { opacity:0.55; font-size:10px; }
+  #tracking-badge .stop-btn:hover {
+    background: rgba(255, 71, 71, 0.15);
+    color: #ffaaaa;
+    border-color: rgba(255, 71, 71, 0.6);
+  }
 
-  /* ===== 提示 ===== */
+  /* ==========================================================
+   * 控件样式 — input range / checkbox / 数字标签
+   * ========================================================== */
+  .ctrl-row {
+    margin: 12px 0;
+  }
+  .ctrl-row:first-child { margin-top: 0; }
+  .ctrl-row:last-child  { margin-bottom: 0; }
+
+  .ctrl-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .ctrl-label {
+    color: var(--text-mid);
+    font-size: 10.5px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+  .ctrl-value {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  /* slider — 重写 */
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 1px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(126,182,255,0.6);
+    cursor: pointer;
+    transition: transform var(--t-fast);
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  input[type=range]::-moz-range-thumb {
+    width: 12px; height: 12px; border: none; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(126,182,255,0.6);
+    cursor: pointer;
+  }
+
+  /* checkbox — toggle 风格 */
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    cursor: pointer;
+  }
+  .toggle-row .toggle-label {
+    color: var(--text-mid);
+    font-size: 10.5px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+  .toggle-row input { display: none; }
+  .toggle-row .switch {
+    position: relative;
+    width: 32px; height: 16px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    transition: background var(--t-fast);
+  }
+  .toggle-row .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 12px; height: 12px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: all var(--t-fast) var(--ease);
+  }
+  .toggle-row input:checked + .switch { background: rgba(126, 182, 255, 0.25); }
+  .toggle-row input:checked + .switch::after {
+    left: 18px;
+    background: var(--accent);
+    box-shadow: 0 0 6px rgba(126,182,255,0.6);
+  }
+
+  .divider { height: 1px; background: var(--panel-border); margin: 12px 0; }
+
+  .footnote {
+    margin-top: 12px;
+    font-size: 9.5px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    font-family: var(--font-mono);
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  /* ==========================================================
+   * 图例
+   * ========================================================== */
+  #legend-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  #legend-list .item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background var(--t-fast);
+  }
+  #legend-list .item:hover { background: rgba(126, 182, 255, 0.08); }
+  #legend-list .item.tracking {
+    background: rgba(126, 182, 255, 0.12);
+    border-left: 2px solid var(--accent);
+    padding-left: 6px;
+  }
+  #legend-list .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    box-shadow: 0 0 6px currentColor;
+    flex-shrink: 0;
+  }
+  #legend-list .name {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 1px;
+    color: var(--text);
+    flex: 1;
+  }
+  #legend-list .au {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ==========================================================
+   * Dock 内部的 Hint（操作提示）
+   * ========================================================== */
   #hint {
-    position:absolute; bottom:14px; left:14px; padding:8px 12px;
-    background:rgba(8,12,30,0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    border:1px solid rgba(120,160,255,0.18); border-radius:8px;
-    font-size:11.5px; color:#aac; line-height:1.7;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 1.5px;
+    line-height: 1.8;
+    color: var(--text-dim);
+    padding: 12px;
+    max-width: 240px;
+    min-width: 200px;
   }
-  #hint b { color:#9bd0ff; }
+  #hint .k { color: var(--accent); }
+  #hint .v { color: var(--text-mid); }
 
-  /* 滚动条 */
-  ::-webkit-scrollbar { width:6px; }
-  ::-webkit-scrollbar-track { background:transparent; }
-  ::-webkit-scrollbar-thumb { background:rgba(155,208,255,0.3); border-radius:3px; }
+  /* ==========================================================
+   * 移动端 (< 768px)
+   * ========================================================== */
+  @media (max-width: 768px) {
+    #dock {
+      bottom: 0;
+      left: 0;
+      transform: none;
+      width: 100%;
+      flex-direction: column;
+      gap: 1px;
+      align-items: stretch;
+    }
+    #dock .panel {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+    }
+    #dock .panel:last-child { border-bottom: none; }
+
+    #info-panel {
+      top: auto;
+      bottom: 0;
+      right: 0;
+      left: 0;
+      width: 100%;
+      max-height: 60vh;
+      border-radius: 14px 14px 0 0;
+    }
+
+    #tracking-badge {
+      bottom: auto;
+      top: 14px;
+      left: 14px;
+    }
+  }
+
+  /* 滚动条 — SpaceX 风细线 */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.12); }
 </style>
 </head>
 <body>
+
 <div id="app"></div>
 
-<div id="titlebar">🌌 <b>太阳系</b> 3D 探索器 · 拖拽旋转 · 滚轮缩放 · 点击星球</div>
+<!-- ============================================================
+     底部 Dock — 多 panel 横向排列，统一从底部中心对齐
+     ============================================================ -->
+<div id="dock">
 
+  <!-- 操作提示（折叠：只剩 header） -->
+  <section class="panel" id="panel-hint">
+    <div class="panel-header" data-collapse-btn>
+      <span class="title">Controls</span>
+      <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="panel-body" data-collapse-body>
+      <div id="hint">
+        <span class="k">DRAG</span> <span class="v">左键旋转视角</span><br>
+        <span class="k">PAN</span> <span class="v">右键平移</span><br>
+        <span class="k">ZOOM</span> <span class="v">滚轮缩放</span><br>
+        <span class="k">CLICK</span> <span class="v">点击星球 / 图例</span><br>
+        <span class="k">ESC</span> <span class="v">退出追踪</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 控制台 -->
+  <section class="panel" id="panel-controls" data-collapse>
+    <div class="panel-header" data-collapse-btn>
+      <span class="title">Mission Control</span>
+      <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="panel-body">
+
+      <!-- 时间流速 -->
+      <div class="ctrl-row">
+        <div class="ctrl-head">
+          <span class="ctrl-label">TIME · 时间流速</span>
+          <span class="ctrl-value" id="speed-label">1.0×</span>
+        </div>
+        <input type="range" id="speed-slider" min="0" max="100" value="50" step="0.5">
+      </div>
+
+      <!-- 太阳亮度 -->
+      <div class="ctrl-row">
+        <div class="ctrl-head">
+          <span class="ctrl-label">LUMINANCE · 太阳亮度</span>
+          <span class="ctrl-value" id="brightness-label">1.5</span>
+        </div>
+        <input type="range" id="brightness-slider" min="0.5" max="8" value="1.5" step="0.1">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- toggle 开关 -->
+      <label class="toggle-row">
+        <span class="toggle-label">显示轨道</span>
+        <input type="checkbox" id="toggle-orbits" checked>
+        <span class="switch"></span>
+      </label>
+      <label class="toggle-row">
+        <span class="toggle-label">显示星标</span>
+        <input type="checkbox" id="toggle-labels" checked>
+        <span class="switch"></span>
+      </label>
+      <label class="toggle-row">
+        <span class="toggle-label">星空背景</span>
+        <input type="checkbox" id="toggle-stars" checked>
+        <span class="switch"></span>
+      </label>
+      <label class="toggle-row">
+        <span class="toggle-label">地球云层</span>
+        <input type="checkbox" id="toggle-clouds" checked>
+        <span class="switch"></span>
+      </label>
+      <label class="toggle-row">
+        <span class="toggle-label">太阳辉光</span>
+        <input type="checkbox" id="toggle-bloom" checked>
+        <span class="switch"></span>
+      </label>
+
+      <div class="divider"></div>
+
+      <!-- 星光密度 -->
+      <div class="ctrl-row">
+        <div class="ctrl-head">
+          <span class="ctrl-label">STAR DENSITY</span>
+          <span class="ctrl-value" id="stars-density-label">100%</span>
+        </div>
+        <input type="range" id="stars-density-slider" min="0" max="100" value="100" step="5">
+      </div>
+
+      <div class="footnote">AU 真实 · 体积艺术夸张</div>
+    </div>
+  </section>
+
+  <!-- 行星图例 -->
+  <section class="panel" id="panel-legend" data-collapse>
+    <div class="panel-header" data-collapse-btn>
+      <span class="title">Bodies</span>
+      <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="panel-body">
+      <div id="legend-list"></div>
+    </div>
+  </section>
+</div>
+
+<!-- 追踪浮条（左下角） -->
 <div id="tracking-badge">
-  🔭 追踪: <span id="tracking-name">—</span>
-  <button class="stop-btn" id="tracking-stop-btn">停止</button>
+  <span class="pulse"></span>
+  <span>TRACKING</span>
+  <span class="target-name" id="tracking-name">—</span>
+  <button class="stop-btn" id="tracking-stop-btn">STOP</button>
   <span class="esc-hint">ESC</span>
 </div>
 
-<!-- 控制面板 -->
-<div id="controls">
-  <h3>⚙ 控制台</h3>
-
-  <!-- 时间流速 slider (分段: 0-50 线性 0-1×，50-100 对数 1-100×) -->
-  <div class="slider-row">
-    <div class="slider-head">
-      <span>⏱ 时间流速</span>
-      <b id="speed-label">1×</b>
-    </div>
-    <input type="range" id="speed-slider" min="0" max="100" value="50" step="0.5">
-    <div class="speed-ticks">
-      <span>暂停</span><span>慢</span><span>1×</span><span>10×</span><span>100×</span>
-    </div>
-  </div>
-
-  <!-- 太阳亮度 slider (decay=0, 1.5 已足够亮，5+ 会过曝) -->
-  <div class="slider-row">
-    <div class="slider-head">
-      <span>☀ 太阳亮度</span>
-      <b id="brightness-label">1.5</b>
-    </div>
-    <input type="range" id="brightness-slider" min="0.5" max="8" value="1.5" step="0.1">
-    <div class="speed-ticks">
-      <span>暗</span><span></span><span>标准</span><span></span><span>亮</span>
-    </div>
-  </div>
-
-  <label><input type="checkbox" id="toggle-orbits" checked> 显示轨道</label><br>
-  <label><input type="checkbox" id="toggle-labels" checked> 显示星标</label><br>
-  <label><input type="checkbox" id="toggle-stars" checked> 星空背景</label><br>
-  <label><input type="checkbox" id="toggle-clouds" checked> 地球云层</label><br>
-  <label><input type="checkbox" id="toggle-bloom" checked> 太阳辉光</label>
-
-  <!-- 星光密度滑动条（0=无星空，100=密集星空，默认 100）-->
-  <div class="slider-row">
-    <div class="slider-head">
-      <span>✨ 星光密度</span>
-      <b id="stars-density-label">100%</b>
-    </div>
-    <input type="range" id="stars-density-slider" min="0" max="100" value="100" step="5">
-    <div class="speed-ticks">
-      <span>无</span><span></span><span>中等</span><span></span><span>密集</span>
-    </div>
-  </div>
-  <div style="font-size:10.5px;color:#88a;margin-top:4px;">距离按 AU 真实 · 体积艺术夸张</div>
-</div>
-
-<!-- 信息面板 -->
+<!-- 星球信息面板（右侧抽屉） -->
 <div id="info-panel">
-  <span class="close" id="info-close">✕</span>
-  <h2 id="info-name">—</h2>
-  <div class="subtitle" id="info-type">—</div>
-  <div class="data-grid" id="info-data"></div>
-  <div class="fact" id="info-fact"></div>
+  <div class="panel-header" style="cursor:default;">
+    <span class="title" id="info-type">—</span>
+    <span class="close" id="info-close" style="opacity:0.6;cursor:pointer;font-family:var(--font-mono);font-size:14px;letter-spacing:2px;">×</span>
+  </div>
+  <div class="panel-body">
+    <h2 id="info-name">—</h2>
+    <div class="data-grid" id="info-data"></div>
+    <div class="fact" id="info-fact"></div>
+  </div>
 </div>
 
-<!-- 图例 -->
-<div id="legend">
-  <h4>🪐 行星 <span style="font-size:9.5px;color:#668;font-weight:normal;">· 点击切换追踪</span></h4>
-  <div id="legend-list"></div>
-</div>
-
-<div id="hint">
-  <b>操作：</b> 左键拖拽旋转 · 右键平移 · 滚轮缩放 · 点击星球查看科普<br>
-  <b>追踪：</b> 点击星球或图例进入追踪 · ESC 或按钮停止 · 拖拽 / 滚轮调节视角<br>
-  <b>作者：</b> Hermes Agent · Three.js · 2026
-</div>
-
+<!-- importmap + 全局错误 + 入口 -->
 <script type="importmap">
 {
   "imports": {
@@ -206,7 +638,6 @@
 }
 </script>
 
-<!-- 全局错误显示 — JS 报错时显示在屏幕上方便诊断 -->
 <script>
   window.addEventListener('error', (e) => {
     const err = document.createElement('div');
@@ -222,6 +653,6 @@
   });
 </script>
 
-<script type="module" src="./src/main.js?v=20260701"></script>
+<script type="module" src="./src/main.js?v=20260702b"></script>
 </body>
 </html>

@@ -120,7 +120,33 @@ export function bindStarsToggle(stars) {
 
 let _currentStarsObj = null;
 
-/* 信息面板（通过自定义事件接收） */
+/* ====== SpaceX 风可折叠面板系统 ======
+ * 每个 panel 通过 `[data-collapse]` + `[data-collapse-body]` 实现
+ * 状态保存在 localStorage（key = panelId）
+ */
+export function initCollapse() {
+  const panels = document.querySelectorAll('[data-collapse]');
+  panels.forEach((panel) => {
+    const id = panel.id;
+    if (!id) return;
+    const btn = panel.querySelector('[data-collapse-btn]');
+    const key = `collapse_${id}`;
+    let open = localStorage.getItem(key);
+    open = open === null ? true : open === '1';
+    apply();
+    btn?.addEventListener('click', () => {
+      open = !open;
+      localStorage.setItem(key, open ? '1' : '0');
+      apply();
+    });
+    function apply() {
+      panel.classList.toggle('collapsed', !open);
+      if (btn) btn.setAttribute('aria-expanded', String(open));
+    }
+  });
+}
+
+
 export function initInfoPanel() {
   window.addEventListener('show-info', (e) => {
     const d = e.detail;

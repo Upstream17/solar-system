@@ -1,6 +1,7 @@
 /* main.js — 入口 + 初始化 + 主循环 */
 
 import * as THREE from 'three';
+import * as Loader from './loader.js';
 import { initScene, updateStarsTime, updateStarPositions } from './scene.js';
 import { initLighting } from './lighting.js';
 import { makeSun, makePlanet, makeMoon, makeOrbit } from './planets.js';
@@ -9,9 +10,12 @@ import { initTracking, tickCameraAnim, tickTracking } from './tracking.js';
 import {
   initSliders, initToggles, bindStarsToggle,
   initInfoPanel, initLegend, initTrackingStopButton, initSceneClick,
-  getSpeedFactor
+  getSpeedFactor, initCollapse
 } from './ui.js';
 import { PLANETS, SUN_R, MOON, DIST_SCALE } from './constants.js';
+
+// 进入页面立刻显示 loader overlay（在 JS bundle 完成前）
+Loader.show();
 
 const SIM_DAYS_PER_SEC = 5;
 let elapsedDays = 0;
@@ -21,14 +25,16 @@ async function init() {
   try {
     // 1. 场景
     const { scene, camera, renderer, controls, stars, composer, bloomPass } = initScene();
-    window.__scene = scene;  // 给 ui.js 的 density slider 用（重新生成 stars）
-    window.__bloomPass = bloomPass;  // 给 ui.js 的 bloom toggle 用
+    window.__scene = scene;
+    window.__camera = camera;        // 新增：loader 调试 / collapse 用
+    window.__renderer = renderer;
+    window.__bloomPass = bloomPass;
 
     // 2. 光照
     const { sunLight } = initLighting(scene);
-    window.__sunLight = sunLight;  // 预留（辉光已不再需要挂 sunLight）
+    window.__sunLight = sunLight;
 
-    // 3. 太阳（辉光 Sprite 内部生成，不再依赖 sunLight）
+    // 3. 太阳（辉光 Sprite 内部生成）
     const sun = await makeSun(scene);
     window.__sun = sun;
 
@@ -50,7 +56,7 @@ async function init() {
     } catch (e) { console.error('moon failed:', e); }
     window.__moon = moonObj;
 
-    // 6. 太阳轨道环（艺术装饰 — 紧贴太阳表面）
+    // 6. 太阳轨道环
     scene.add(makeOrbit(SUN_R * 1.05));
 
     // 7. 缩放初始化
@@ -63,8 +69,9 @@ async function init() {
     initInfoPanel();
     initTracking(camera, controls, renderer);
     initTrackingStopButton();
+    initCollapse();   // 新增：折叠面板初始化（必须在 UI 元素都加载完后）
 
-    // 9. 点击交互（行星列表）
+    // 9. 点击交互
     const allClickable = [];
     function rebuildClickableList() {
       allClickable.length = 0;
@@ -148,6 +155,8 @@ async function init() {
       requestAnimationFrame(tick);
     }
     tick();
+
+    Loader.hide();
 
     console.log('%c🌌 太阳系 3D 探索器已就绪','color:#9bd0ff;font-size:14px;font-weight:bold');
   } catch (e) {

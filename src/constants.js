@@ -11,13 +11,16 @@ export const AU = 1;  // 单位基准（不再乘 14，所有距离按 AU 直接
 
 // ===== NASA 标准距离缩放 =====
 // 1 AU = K 世界单位。tycho.ioz 风格：让轨道铺满视野
-// K=80 → 水星 31.2 / 地球 80 / 海王星 2404
-export const DIST_SCALE = 80;
+// K=160 → 水星 62.4 / 地球 160 / 海王星 4808（距离 ×2，宇宙空旷感 ×2）
+// 太阳半径同步放大到 12.0，相对比例保持真实
+export const DIST_SCALE = 160;
 
 // ===== 太阳半径 =====
-// tycho.ioz 风格：太阳只是个微小的光点（半径 1 单位）
-// 视觉上通过辉光 sprite 让太阳看上去大，但物理半径很小 → 不挡视线
-export const SUN_R = 1.0;
+// 真实太阳半径 ≈ 109 × 地球，但这样所有行星都变成看不见的尘埃。
+// 演示采用 12.0（DIST_SCALE 翻倍后同步翻倍，保持比例协调）
+// 占视野比例 ≈ 2×atan(12/300) ≈ 4.6°，FOV 55° 下约占 8%，肉眼可识别为"有体积的天体"
+// 信息面板已说明"距离按 AU 真实 · 体积艺术夸张"
+export const SUN_R = 12.0;
 
 // ===== 行星半径（按真实相对大小，单位：地球半径）=====
 // 真实数据：
@@ -29,7 +32,7 @@ export const PLANETS = [
     name:'水星', en:'Mercury', color:0xb5a187,
     distance:0.39, size:0.383, realSize:0.383, diameterKm:4879,
     orbit:88,   rotation:58.6,  tilt:0.03, eccentricity:0.205,
-    texture:'https://threejs.org/examples/textures/planets/mercury.jpg',
+    texture:'./src/textures/mercury.jpg',
     type:'类地行星 · 岩石行星',
     facts:{ diameter:'4,879 km', mass:'3.30×10²³ kg', day:'58.6 地球日', year:'88 地球日',
             temp:'-173 ~ 427 °C', moons:'0', gravity:'3.7 m/s²' },
@@ -39,7 +42,7 @@ export const PLANETS = [
     name:'金星', en:'Venus', color:0xe8c084,
     distance:0.72, size:0.949, realSize:0.949, diameterKm:12104,
     orbit:225,  rotation:-243,  tilt:177.4, eccentricity:0.007,
-    texture:'https://threejs.org/examples/textures/planets/venus.jpg',
+    texture:'./src/textures/venus.jpg',
     type:'类地行星 · 岩石行星',
     facts:{ diameter:'12,104 km', mass:'4.87×10²⁴ kg', day:'243 地球日 (逆向)', year:'225 地球日',
             temp:'462 °C (均温)', moons:'0', gravity:'8.87 m/s²' },
@@ -49,8 +52,9 @@ export const PLANETS = [
     name:'地球', en:'Earth', color:0x3a8fd7,
     distance:1.00, size:1.000, realSize:1.000, diameterKm:12742,
     orbit:365.25, rotation:1,   tilt:23.44, eccentricity:0.017,
-    texture:'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
-    bumpMap:'https://threejs.org/examples/textures/planets/earth_normal_2048.jpg',
+    texture:'./src/textures/earth.jpg',
+    bumpMap:'./src/textures/earth_normal.jpg',
+    cloudsTexture:'./src/textures/earth_clouds.jpg',
     type:'类地行星 · 我们的家园',
     facts:{ diameter:'12,742 km', mass:'5.97×10²⁴ kg', day:'24 小时', year:'365.25 天',
             temp:'-88 ~ 58 °C', moons:'1', gravity:'9.81 m/s²' },
@@ -60,7 +64,7 @@ export const PLANETS = [
     name:'火星', en:'Mars', color:0xc1440e,
     distance:1.52, size:0.532, realSize:0.532, diameterKm:6779,
     orbit:687,  rotation:1.03, tilt:25.19, eccentricity:0.093,
-    texture:'https://threejs.org/examples/textures/planets/mars.jpg',
+    texture:'./src/textures/mars.jpg',
     type:'类地行星 · 岩石行星',
     facts:{ diameter:'6,779 km', mass:'6.42×10²³ kg', day:'24.6 小时', year:'687 地球日',
             temp:'-63 °C (均温)', moons:'2', gravity:'3.71 m/s²' },
@@ -70,7 +74,7 @@ export const PLANETS = [
     name:'木星', en:'Jupiter', color:0xd6a878,
     distance:5.20, size:11.21, realSize:11.209, diameterKm:139820,
     orbit:4333, rotation:0.41, tilt:3.13, eccentricity:0.048,
-    texture:'https://threejs.org/examples/textures/planets/jupiter.jpg',
+    texture:'./src/textures/jupiter.jpg',
     type:'气态巨行星 (Gas Giant)',
     facts:{ diameter:'139,820 km', mass:'1.90×10²⁷ kg', day:'9.9 小时', year:'11.86 年',
             temp:'-145 °C', moons:'95+', gravity:'24.79 m/s²' },
@@ -80,7 +84,8 @@ export const PLANETS = [
     name:'土星', en:'Saturn', color:0xeacb8b,
     distance:9.58, size:9.45, realSize:9.449, diameterKm:116460,
     orbit:10759, rotation:0.45, tilt:26.73, eccentricity:0.054,
-    texture:'https://threejs.org/examples/textures/planets/saturn.jpg',
+    texture:'./src/textures/saturn.jpg',
+    ringTexture:'./src/textures/saturn_ring.jpg',
     ring:true,
     ringInner:3.5, ringOuter:6.5,
     type:'气态巨行星 · 带环行星',
@@ -92,7 +97,8 @@ export const PLANETS = [
     name:'天王星', en:'Uranus', color:0x9fd9e8,
     distance:19.20, size:4.01, realSize:4.007, diameterKm:50724,
     orbit:30687, rotation:-0.72, tilt:97.77, eccentricity:0.047,
-    texture:'https://threejs.org/examples/textures/planets/uranus.jpg',
+    texture:'./src/textures/uranus.jpg',
+    ringTexture:'./src/textures/uranus_ring.jpg',
     ring:true, ringInner:2.4, ringOuter:3.2, ringColor:0x556677,
     type:'冰巨行星 (Ice Giant)',
     facts:{ diameter:'50,724 km', mass:'8.68×10²⁵ kg', day:'17.2 小时 (逆向)', year:'84 年',
@@ -103,7 +109,7 @@ export const PLANETS = [
     name:'海王星', en:'Neptune', color:0x4060e0,
     distance:30.05, size:3.88, realSize:3.883, diameterKm:49244,
     orbit:60190, rotation:0.67, tilt:28.32, eccentricity:0.009,
-    texture:'https://threejs.org/examples/textures/planets/neptune.jpg',
+    texture:'./src/textures/neptune.jpg',
     type:'冰巨行星 (Ice Giant)',
     facts:{ diameter:'49,244 km', mass:'1.02×10²⁶ kg', day:'16.1 小时', year:'164.8 年',
             temp:'-218 °C', moons:'14', gravity:'11.15 m/s²' },
@@ -113,13 +119,15 @@ export const PLANETS = [
 
 /* 月球（地球的卫星）
  * 真实：月地距离 60 地球半径，月球/地球半径 0.27
- * 演示：距离 3.0（约 3×地球半径，视觉上月球清晰可见但不喧宾夺主）
- *       大小 0.18（比真实 0.27 更小，让月球看上去明显小于地球）*/
+ * 演示：距离 8.0（演示上明显远离地球，但仍肉眼可识别月球 + 陨石坑纹理，
+ *              且 tracking 地球时相机距离 ~5 单位，月球在视野边缘可见）
+ *       大小 0.25（比真实 0.27 略小，让月球看上去明显小于地球但不至于完全消失）
+ *       距离 8 = 8 地球半径，介于真实 60 地球半径和当前 3 的折中值 */
 export const MOON = {
   name:'月球', en:'Moon', parent:'地球',
-  distance:3.0, size:0.18, realSize:0.273, diameterKm:3474,
+  distance:8.0, size:0.25, realSize:0.273, diameterKm:3474,
   orbit:27.3, rotation:27.3,
-  texture:'https://threejs.org/examples/textures/planets/moon.jpg',
+  texture:'./src/textures/moon.jpg',
   facts:{ diameter:'3,474 km', mass:'7.35×10²² kg', day:'27.3 地球日', year:'27.3 地球日',
           temp:'-173 ~ 127 °C', moons:'0', gravity:'1.62 m/s²' },
   fact:'<b>月球</b>是地球唯一的天然卫星，约形成于 45 亿年前。<br>它的潮汐作用稳定了地球自转轴。<br>月球正以每年 3.8 cm 的速度远离地球。'

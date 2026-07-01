@@ -1,7 +1,7 @@
 /* main.js — 入口 + 初始化 + 主循环 */
 
 import * as THREE from 'three';
-import { initScene } from './scene.js';
+import { initScene, updateStarsTime, updateStarPositions } from './scene.js';
 import { initLighting } from './lighting.js';
 import { makeSun, makePlanet, makeMoon, makeOrbit } from './planets.js';
 import { scaleScene, getDisplayDistance } from './scale.js';
@@ -20,12 +20,15 @@ let elapsedDays = 0;
 async function init() {
   try {
     // 1. 场景
-    const { scene, camera, renderer, controls, stars } = initScene();
+    const { scene, camera, renderer, controls, stars, composer, bloomPass } = initScene();
+    window.__scene = scene;  // 给 ui.js 的 density slider 用（重新生成 stars）
+    window.__bloomPass = bloomPass;  // 给 ui.js 的 bloom toggle 用
 
     // 2. 光照
     const { sunLight } = initLighting(scene);
+    window.__sunLight = sunLight;  // 预留（辉光已不再需要挂 sunLight）
 
-    // 3. 太阳
+    // 3. 太阳（辉光 Sprite 内部生成，不再依赖 sunLight）
     const sun = await makeSun(scene);
     window.__sun = sun;
 
@@ -80,6 +83,7 @@ async function init() {
       camera.aspect = innerWidth/innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
+      composer.setSize(innerWidth, innerHeight);  // composer 也要同步
     });
 
     // 12. 主循环
@@ -102,6 +106,10 @@ async function init() {
           o.pivot.position.set(Math.cos(ang)*dist, 0, Math.sin(ang)*dist);
           const ws = (Math.PI*2) / (p.rotation || 1);
           o.mesh.rotation.y += deltaSim * SIM_DAYS_PER_SEC * ws * 0.02;
+          // 地球云层反向旋转（西风效应，制造大气流动感）
+          if (o.mesh.userData.cloudsMesh) {
+            o.mesh.userData.cloudsMesh.rotation.y -= deltaSim * SIM_DAYS_PER_SEC * ws * 0.025;
+          }
         });
       }
 
@@ -118,13 +126,25 @@ async function init() {
 
       // 星空旋转（用 deltaReal，不跟 speedFactor）
       stars.rotation.y += deltaReal * 0.0008;
+      // 星空闪烁 uTime（用 deltaReal，不跟 speedFactor）
+      updateStarsTime(deltaReal);
+      // 星空位置跟随相机（让相机移到海王星时背向太阳方向也能看到星星）
+      updateStarPositions(camera);
+
+      // 太阳辉光：按相机距离分级 + 平滑过渡
+      // （每帧调用 update() 重新计算 4 层 sprite 的 opacity/scale，并淡出 sun 本体）
+      const sun = window.__sun;
+      if (sun && sun.userData.glowUpdate) {
+        const camDist = camera.position.length();
+        sun.userData.glowUpdate(camDist, sun);
+      }
 
       // 相机动画 + 追踪
       tickCameraAnim(deltaReal);
       tickTracking();
 
       controls.update();
-      renderer.render(scene, camera);
+      composer.render();  // 用后处理 pipeline 渲染（带 bloom）
       requestAnimationFrame(tick);
     }
     tick();

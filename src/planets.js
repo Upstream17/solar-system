@@ -3,11 +3,7 @@
 import * as THREE from 'three';
 import { SUN_R, PLANETS, MOON } from './constants.js';
 import { safeTexture } from './textures.js';
-import {
-  makeGlowSprite,
-  GLOW_INNER_SCALE, GLOW_INNER_OPACITY, GLOW_INNER_COLOR,
-  GLOW_OUTER_SCALE, GLOW_OUTER_OPACITY, GLOW_OUTER_COLOR
-} from './lighting.js';
+import { makeSunGlow } from './lighting.js';
 
 /* 文字标签（Canvas 渲染 → Sprite） */
 function makeTextSprite(text, color='#9bd0ff') {
@@ -51,19 +47,25 @@ export function makeOrbit(distance) {
   return line;
 }
 
-/* 太阳辉光 sprite 数组（外部可访问以控制 opacity/visible） */
+/* 太阳辉光元素数组（4 层 Sprite，外部可访问以控制 visible）
+ * 元素顺序: [halo, corona, glow, core] — 从外到内
+ */
 export const sunGlowSprites = [];
 
 /* ===== 太阳 ===== */
 export async function makeSun(scene) {
-  const sunTex = await safeTexture('https://threejs.org/examples/textures/planets/sun.jpg', 'sun');
-  // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 1.0）
-  const geo = new THREE.SphereGeometry(1.0, 48, 48);
-  // 修复 #3: 太阳偏暗问题 — 用亮黄色 + 提亮 texture + toneMapped:false 让太阳保持亮色不被压暗
+  const sunTex = await safeTexture('./src/textures/sun.jpg', 'sun');
+  // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 12.0）
+  const geo = new THREE.SphereGeometry(1.0, 64, 64);
+  // 太阳本体：温和暖白（G2V 真实颜色）— 亮度由 toneMapped:false + bloom 维持，不靠颜色
+  // 之前用纯白 #ffffff 显得"电灯泡"，G2V 型恒星实际是带轻微暖色的白色
+  // 暖白 #fff5d8 在视觉上更像真实太阳（NASA SDO 影像的真实颜色）
   const mat = new THREE.MeshBasicMaterial({
     map: sunTex,
-    color: 0xffeeaa,  // 暖黄色叠加
-    toneMapped: false  // 不参与 tone mapping（保持最亮）
+    color: 0xfff5d8,        // 温和暖白（G2V 真实颜色，不偏黄也不偏冷）
+    toneMapped: false,      // 不参与 tone mapping（保持最亮，配合 bloom 过曝）
+    transparent: false,
+    depthWrite: true
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.userData = { isSun:true, name:'太阳', size:SUN_R, type:'恒星 G2V 型 · 黄矮星',
@@ -72,13 +74,15 @@ export async function makeSun(scene) {
     fact:'<b>太阳</b>是太阳系的中心天体，占系统总质量的 99.86%。<br>每秒将约 600 万吨氢聚变成氦。<br>光从太阳表面到达地球约需 8 分 20 秒。' };
   scene.add(mesh);
 
-  // 辉光：双层 sprite（修 #5 HDR 观感）
-  // 修 #1: 外层 2.5× 太阳，"浅浅一层"覆盖；内层 1.2× 纯白刺眼核心
-  const glowInner = makeGlowSprite(GLOW_INNER_COLOR, SUN_R * GLOW_INNER_SCALE, GLOW_INNER_OPACITY);
-  const glowOuter = makeGlowSprite(GLOW_OUTER_COLOR, SUN_R * GLOW_OUTER_SCALE, GLOW_OUTER_OPACITY);
-  mesh.add(glowInner);
-  mesh.add(glowOuter);
-  sunGlowSprites.push(glowInner, glowOuter);
+  // 4 层 Sprite 辉光（按相机距离分级显示 + 平滑过渡）
+  // — 替代官方 Lensflare，sizeAttenuation: true 让近处大、远处小
+  // — 永远输出圆形（径向渐变贴图），杜绝 UnrealBloomPass 的方形外圈
+  const glow = makeSunGlow(SUN_R);
+  mesh.add(glow.group);
+  // 暴露元素给 toggle（4 个 Sprite：halo / corona / glow / core）
+  glow.sprites.forEach(s => sunGlowSprites.push(s));
+  // 暴露 update 函数给主循环（每帧根据相机距离调整 opacity/scale/可见性）
+  mesh.userData.glowUpdate = glow.update;
 
   addLabel(mesh, '☀ 太阳', 1.5);
   return mesh;
@@ -120,19 +124,56 @@ export async function makePlanet(scene, p) {
 
   // 土星/天王星环
   if (p.ring) {
-    const ringGeo = new THREE.RingGeometry(p.realSize*1.4, p.realSize*(p.ringOuter||2.2), 96);
+    const ringInner = p.realSize*1.4;
+    const ringOuter = p.realSize*(p.ringOuter||2.2);
+    const ringGeo = new THREE.RingGeometry(ringInner, ringOuter, 96);
     const pos = ringGeo.attributes.position;
     const uv = ringGeo.attributes.uv;
     for (let i=0;i<pos.count;i++){
       const x = pos.getX(i), y = pos.getY(i);
-      uv.setXY(i, (Math.sqrt(x*x+y*y) - p.realSize*1.4) / (p.realSize*((p.ringOuter||2.2)-1.4)), 0.5);
+      uv.setXY(i, (Math.sqrt(x*x+y*y) - ringInner) / (ringOuter - ringInner), 0.5);
+    }
+    // 有 ringTexture 用贴图；没有 fallback 纯色（向后兼容）
+    let ringMap = null;
+    if (p.ringTexture) {
+      ringMap = await safeTexture(p.ringTexture, p.name === '土星' ? 'saturn_ring' : 'uranus_ring');
     }
     const ringMat = new THREE.MeshBasicMaterial({
-      color:p.ringColor||0xc9b896, side:THREE.DoubleSide, transparent:true, opacity:0.75
+      map: ringMap || null,
+      color: ringMap ? 0xffffff : (p.ringColor||0xc9b896),
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = Math.PI/2;
     mesh.add(ring);
+  }
+
+  // 地球云层（独立 sprite — 降透明度 + noise displacement 避免塑料贴图感）
+  // 关键：opacity 0.55 → 0.35（与海陆融合），displacement 让云朵有"凸起感"而非平贴
+  if (p.cloudsTexture) {
+    const cloudsTex = await safeTexture(p.cloudsTexture, 'earth_clouds');
+    const cloudsGeo = new THREE.SphereGeometry(p.realSize * 1.018, 64, 64);
+    // 顶点 displacement — 用噪声让云层表面起伏（凸起的云团比平贴真实）
+    const posAttr = cloudsGeo.attributes.position;
+    for (let i = 0; i < posAttr.count; i++) {
+      const x = posAttr.getX(i), y = posAttr.getY(i), z = posAttr.getZ(i);
+      // 用顶点方向 + 噪声幅度推出去（伪 noise — 数学稳定）
+      const noise = Math.sin(x * 8) * Math.cos(y * 8) * Math.sin(z * 8) * 0.005;
+      posAttr.setXYZ(i, x * (1 + noise), y * (1 + noise), z * (1 + noise));
+    }
+    cloudsGeo.computeVertexNormals();
+    const cloudsMat = new THREE.MeshStandardMaterial({
+      map: cloudsTex, transparent: true, opacity: 0.35,
+      depthWrite: false,
+      roughness: 0.95,
+      emissive: 0xffffff, emissiveMap: cloudsTex, emissiveIntensity: 0.08  // 让云白天反射阳光
+    });
+    const cloudsMesh = new THREE.Mesh(cloudsGeo, cloudsMat);
+    cloudsMesh.userData.isClouds = true;
+    mesh.add(cloudsMesh);
+    mesh.userData.cloudsMesh = cloudsMesh;
   }
 
   addLabel(mesh, p.name, p.realSize * 1.6);

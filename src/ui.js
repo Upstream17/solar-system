@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { scaleScene } from './scale.js';
 import { sunGlowSprites } from './planets.js';
 import { startTracking, stopTracking } from './tracking.js';
+import { regenerateStars } from './scene.js';
+import { setGlowEnabled } from './lighting.js';
 
 const $ = id => document.getElementById(id);
 
@@ -59,19 +61,64 @@ export function initToggles(scene, camera, controls) {
     scene.traverse(o=>{ if (o.userData?.isLabel) o.visible = toggleLabels.checked; });
   });
 
-  // 辉光开关：双层 sprite 各自独立控制 opacity
-  const baseOps = [0.55, 0.10];  // [内层白核, 外层淡黄]
+  // 辉光开关：调用 lighting.js 的 setGlowEnabled() 设置全局标志
+  // — 由主循环 glowUpdate() 每帧检查这个标志，避免 per-frame 覆盖 visible
+  // — 关闭时：所有 sprite 不可见，sun mesh 完全不透明（无光晕，纯纹理）
+  // — 开启时：4 层 sprite 按距离平滑显示，sun mesh 适度淡出
+  const BLOOM_ON = 0.4, BLOOM_OFF = 0.0;
   toggleBloom.addEventListener('change', ()=>{
-    sunGlowSprites.forEach((s, i)=>{
-      s.visible = toggleBloom.checked;
-      s.material.opacity = toggleBloom.checked ? baseOps[i] || 0.55 : 0;
+    const enabled = toggleBloom.checked;
+    // 联动 bloomPass（仅做中心提亮，强度很弱）
+    const pass = window.__bloomPass;
+    if (pass) pass.strength = enabled ? BLOOM_ON : BLOOM_OFF;
+    // 设置全局标志 — 主循环 glowUpdate() 会检查这个标志
+    setGlowEnabled(enabled);
+    // 兼容：直接同步所有 sprite 的 visible（用户切换瞬间立即生效，不必等下一帧）
+    sunGlowSprites.forEach(s => { s.visible = enabled; });
+  });
+
+  // 地球云层开关：遍历所有行星，找到 userData.cloudsMesh 的那个切换 visible
+  const toggleClouds = $('toggle-clouds');
+  toggleClouds.addEventListener('change', () => {
+    const planets = window.__planets || [];
+    planets.forEach(o => {
+      if (o.mesh?.userData?.cloudsMesh) {
+        o.mesh.userData.cloudsMesh.visible = toggleClouds.checked;
+      }
     });
   });
 }
 
+/* 星空显示 + 密度控制 */
 export function bindStarsToggle(stars) {
-  $('toggle-stars').addEventListener('change', ()=>{ stars.visible = $('toggle-stars').checked; });
+  const toggleStars = $('toggle-stars');
+  const densitySlider = $('stars-density-slider');
+  const densityLabel = $('stars-density-label');
+
+  // 显示/隐藏：直接改 stars.visible（不需要销毁几何）
+  toggleStars.addEventListener('change', () => {
+    if (_currentStarsObj) _currentStarsObj.visible = toggleStars.checked;
+  });
+
+  // 密度滑块：销毁旧 stars + 重新生成
+  // 注意：regenerateStars 内部已管理全局 _starsObj
+  densitySlider.addEventListener('input', () => {
+    const pct = +densitySlider.value;
+    densityLabel.textContent = `${pct}%`;
+    // 找当前 scene
+    const scene = window.__scene;
+    if (!scene) return;
+    const newStars = regenerateStars(scene, pct);
+    _currentStarsObj = newStars;
+    // 同步 toggle 状态
+    if (newStars) newStars.visible = toggleStars.checked;
+  });
+
+  // 初始化 _currentStarsObj 引用
+  _currentStarsObj = stars;
 }
+
+let _currentStarsObj = null;
 
 /* 信息面板（通过自定义事件接收） */
 export function initInfoPanel() {

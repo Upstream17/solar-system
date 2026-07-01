@@ -13,8 +13,7 @@
 
 import * as THREE from 'three';
 import { DIST_SCALE, SUN_R, PLANETS, MOON } from './constants.js';
-import { makeOrbit, sunGlowSprites } from './planets.js';
-import { GLOW_INNER_SCALE, GLOW_OUTER_SCALE } from './lighting.js';
+import { makeOrbit } from './planets.js';
 
 const _orbitLines = [];
 
@@ -57,17 +56,10 @@ export function scaleScene(scene, camera, controls) {
   const sun = window.__sun;
   if (!planetObjs) return;
 
-  // 太阳几何尺寸 1.0，scale = SUN_R（=1.0，不缩放）
-  sun.scale.setScalar(SUN_R / 1.0);
+  // 太阳几何尺寸 1.0，scale = SUN_R（保持基准单位 1.0，外部 scale 控制大小）
+  sun.scale.setScalar(SUN_R);
 
-  // 辉光：双层 sprite
-  // 内层（紧贴太阳）+ 外层（淡黄覆盖）
-  const innerScales = GLOW_INNER_SCALE;  // 单值
-  const outerScales = GLOW_OUTER_SCALE;  // 单值
-  sunGlowSprites.forEach((s, i) => {
-    const sc = i === 0 ? innerScales : outerScales;
-    s.scale.set(SUN_R * sc, SUN_R * sc, 1);
-  });
+  // 辉光 Sprite 已通过 sizeAttenuation 自适应相机距离，无需手动控制
 
   // 行星：geometry 已用 realSize 创建，无需 scale
   planetObjs.forEach(o=>{
@@ -84,9 +76,10 @@ export function scaleScene(scene, camera, controls) {
 
   regenerateOrbits(scene);
 
-  // 相机默认位置（tycho.ioz 风格：视野内能看到水星到火星）
-  // 海王星在 2404 单位远处，需要相机 ~3000 才能看到完整太阳系
-  // 默认相机放在能看到金星-火星的范围（用户滚轮拉远看外行星）
-  camera.position.set(0, 80, 250);
+  // 相机默认位置（tycho.ioz 风格：视野内能看到金星-火星）
+  // DIST_SCALE 翻倍后同步：相机放在 (0, 100, 300) 距离 ≈ 316 单位
+  // 太阳半径 12.0，FOV 55° 下占视野 ≈ 2×atan(12/316) ≈ 4.4° ≈ 视野 8%
+  // 海王星在 4808 单位远处，需要相机 ~6000 才能看到完整太阳系（用户滚轮拉远）
+  camera.position.set(0, 100, 300);
   controls.target.set(0, 0, 0);
 }

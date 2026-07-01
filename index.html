@@ -159,8 +159,21 @@
   <label><input type="checkbox" id="toggle-orbits" checked> 显示轨道</label><br>
   <label><input type="checkbox" id="toggle-labels" checked> 显示星标</label><br>
   <label><input type="checkbox" id="toggle-stars" checked> 星空背景</label><br>
+  <label><input type="checkbox" id="toggle-clouds" checked> 地球云层</label><br>
   <label><input type="checkbox" id="toggle-bloom" checked> 太阳辉光</label>
-  <div style="font-size:10.5px;color:#88a;margin-top:4px;">距离按 AU 真实 · 体积真实相对</div>
+
+  <!-- 星光密度滑动条（0=无星空，100=密集星空，默认 100）-->
+  <div class="slider-row">
+    <div class="slider-head">
+      <span>✨ 星光密度</span>
+      <b id="stars-density-label">100%</b>
+    </div>
+    <input type="range" id="stars-density-slider" min="0" max="100" value="100" step="5">
+    <div class="speed-ticks">
+      <span>无</span><span></span><span>中等</span><span></span><span>密集</span>
+    </div>
+  </div>
+  <div style="font-size:10.5px;color:#88a;margin-top:4px;">距离按 AU 真实 · 体积艺术夸张</div>
 </div>
 
 <!-- 信息面板 -->

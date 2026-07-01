@@ -1,0 +1,29 @@
+# 依赖
+node_modules/
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 构建产物
+dist/
+build/
+.wrangler/
+
+# 日志
+*.log
+npm-debug.log*
+
+# Hermes / Agent scratch（不该污染项目）
+.hermes-scratch/
+
+# 临时测试文件
+test_*.html
+scratch_*.html

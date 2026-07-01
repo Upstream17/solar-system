@@ -111,10 +111,12 @@ export function getFocusTarget() { return focusTarget; }
 export function getCamAnim() { return camAnim; }
 
 /** 设置焦点（点击星球/图例）
- * 修 #2: 再次点击同一目标不再取消（避免误操作），改为重新飞过去
+ * 修 #2: 再次点击同一目标 → 不做任何反应（避免误操作抖动）
  * 退出焦点只能通过 ESC 或徽章上的"停止"按钮 */
 export function startTracking(mesh, withFocus = true) {
-  // 再次点同一目标 → 重新飞过去（不取消）
+  // 重复点同一目标 → 不做任何反应（避免画面抖动误操作）
+  if (focusTarget === mesh) return;
+  // 切换目标 → 重新追踪
   focusTarget = mesh;
   bindEvents();
   updateTrackingBadge();

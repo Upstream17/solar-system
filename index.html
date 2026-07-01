@@ -193,6 +193,22 @@
 }
 </script>
 
-<script type="module" src="./src/main.js"></script>
+<!-- 全局错误显示 — JS 报错时显示在屏幕上方便诊断 -->
+<script>
+  window.addEventListener('error', (e) => {
+    const err = document.createElement('div');
+    err.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#f55; font-family:monospace; background:#000d; padding:24px; border-radius:8px; z-index:99999; max-width:80%; white-space:pre-wrap; border:1px solid #f55;';
+    err.innerHTML = '<b>JS 错误：</b><br>' + e.message + '<br><br><b>位置：</b>' + e.filename + ':' + e.lineno + ':' + e.colno;
+    document.body.appendChild(err);
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const err = document.createElement('div');
+    err.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#f55; font-family:monospace; background:#000d; padding:24px; border-radius:8px; z-index:99999; max-width:80%; white-space:pre-wrap; border:1px solid #f55;';
+    err.innerHTML = '<b>未捕获的 Promise 错误：</b><br>' + e.reason;
+    document.body.appendChild(err);
+  });
+</script>
+
+<script type="module" src="./src/main.js?v=20260701"></script>
 </body>
 </html>

@@ -144,13 +144,13 @@
     </div>
   </div>
 
-  <!-- 太阳亮度 slider -->
+  <!-- 太阳亮度 slider (decay=0, 1.5 已足够亮，5+ 会过曝) -->
   <div class="slider-row">
     <div class="slider-head">
       <span>☀ 太阳亮度</span>
-      <b id="brightness-label">6.0</b>
+      <b id="brightness-label">1.5</b>
     </div>
-    <input type="range" id="brightness-slider" min="2" max="15" value="6" step="0.1">
+    <input type="range" id="brightness-slider" min="0.5" max="8" value="1.5" step="0.1">
     <div class="speed-ticks">
       <span>暗</span><span></span><span>标准</span><span></span><span>亮</span>
     </div>
@@ -161,7 +161,7 @@
   <label><input type="checkbox" id="toggle-stars" checked> 星空背景</label><br>
   <label><input type="checkbox" id="toggle-bloom" checked> 太阳辉光</label><br>
   <label><input type="checkbox" id="toggle-realistic"> 真实比例</label>
-  <div style="font-size:10.5px;color:#88a;margin-top:4px;">关闭可看清全貌</div>
+  <div style="font-size:10.5px;color:#88a;margin-top:4px;">距离按 AU 真实 · 体积对数压缩</div>
 </div>
 
 <!-- 信息面板 -->
@@ -214,24 +214,35 @@ const AU = 14;
 // 太阳偏小（保证水星不穿模），行星用 data.size（艺术夸张值）
 const SUN_DEMO = 1.5;
 
-// ===== 真实模式 =====
-// 太阳看上去"有数百万地球那么大"（相对比例夸张）：
-//   太阳半径 = 4.0，最大行星半径 clip 到太阳 60% = 2.4
-//   木星 11.2 × 0.18 = 2.02 → 太阳 1.98× 木星 ✅
-//   地球 1.0 × 0.18 = 0.18 → 太阳 22× 地球 ✅
-//   水星 0.383 × 0.18 = 0.07 → clip 到 0.22 最小可见尺寸
+// ===== 真实模式（power 压缩 + 大小顺序对 — 工业级 demo 做法）=====
+// 体积不能既"真实"又"装得下"（太阳≈109×地球，海王星≈30×地球轨道）。
+// 折中：power 压缩（EXP=0.4）+ 硬编码水星最小值，保证不穿模
+//   太阳 4.0
+//   水星 0.5 (硬编码)
+//   火星 0.78 / 金星 0.98 / 地球 1.0
+//   海王星 1.72 / 天王星 1.74 / 土星 2.46 / 木星 2.63
+//   太阳/木星 = 1.52× ✓
+//   大小顺序：水星<火星<金星<地球<海王星<天王星<土星<木星<太阳（与真实完全一致 ✓）
 // 距离按真实 AU 比例：DIST_SCALE_REAL = 12
-//   水星 0.39*12 = 4.68 → 太阳 4.0 + 水星 0.22 = 4.22 < 4.68 ✅
-//   海王星 30.05*12 = 360.6 → 距离比例 30× 真实 ✅
 const SUN_REAL = 4.0;
-const PLANET_LINEAR_SCALE = 0.18;  // 真实模式：行星 = realSize × scale
-const MIN_PLANET_RADIUS = 0.22;    // 真实模式最小可视尺寸
-const DIST_SCALE_REAL = 12;        // 真实模式距离缩放（每 AU = 12 世界单位）
+const PLANET_POWER_EXP = 0.4;
+const DIST_SCALE_REAL = 12;
+const SUN_REAL_MAX_PLANET_RATIO = 0.85;  // 最大行星不超过太阳 85%
+const MERCURY_MIN_RADIUS = 0.5;          // 水星最小半径（保证不穿模）
+
+/** 真实模式行星半径：realSize^0.4
+ *  水星最小 0.5，最大不超过太阳 85%
+ */
+function realPlanetRadius(realSize, name) {
+  if (name === '水星') return MERCURY_MIN_RADIUS;
+  const r = Math.pow(realSize, PLANET_POWER_EXP);
+  return Math.min(r, SUN_REAL * SUN_REAL_MAX_PLANET_RATIO);
+}
 
 const PLANETS = [
   {
     name:'水星', en:'Mercury', color:0xb5a187,
-    distance:0.39*AU, size:0.42, realSize:0.383,
+    distance:0.39*AU, size:0.42, realSize:0.383, diameterKm:4879,
     orbit:88,   rotation:58.6,  tilt:0.03, eccentricity:0.205,
     texture:'https://threejs.org/examples/textures/planets/mercury.jpg',
     type:'类地行星 · 岩石行星',
@@ -241,7 +252,7 @@ const PLANETS = [
   },
   {
     name:'金星', en:'Venus', color:0xe8c084,
-    distance:0.72*AU, size:0.95, realSize:0.949,
+    distance:0.72*AU, size:0.95, realSize:0.949, diameterKm:12104,
     orbit:225,  rotation:-243,  tilt:177.4, eccentricity:0.007,
     texture:'https://threejs.org/examples/textures/planets/venus.jpg',
     type:'类地行星 · 岩石行星',
@@ -251,7 +262,7 @@ const PLANETS = [
   },
   {
     name:'地球', en:'Earth', color:0x3a8fd7,
-    distance:1.00*AU, size:1.00, realSize:1.000,
+    distance:1.00*AU, size:1.00, realSize:1.000, diameterKm:12742,
     orbit:365.25, rotation:1,   tilt:23.44, eccentricity:0.017,
     texture:'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
     bumpMap:'https://threejs.org/examples/textures/planets/earth_normal_2048.jpg',
@@ -262,7 +273,7 @@ const PLANETS = [
   },
   {
     name:'火星', en:'Mars', color:0xc1440e,
-    distance:1.52*AU, size:0.55, realSize:0.532,
+    distance:1.52*AU, size:0.55, realSize:0.532, diameterKm:6779,
     orbit:687,  rotation:1.03, tilt:25.19, eccentricity:0.093,
     texture:'https://threejs.org/examples/textures/planets/mars.jpg',
     type:'类地行星 · 岩石行星',
@@ -272,7 +283,7 @@ const PLANETS = [
   },
   {
     name:'木星', en:'Jupiter', color:0xd6a878,
-    distance:5.20*AU, size:1.6, realSize:11.209,
+    distance:5.20*AU, size:1.6, realSize:11.209, diameterKm:139820,
     orbit:4333, rotation:0.41, tilt:3.13, eccentricity:0.048,
     texture:'https://threejs.org/examples/textures/planets/jupiter.jpg',
     type:'气态巨行星 (Gas Giant)',
@@ -282,7 +293,7 @@ const PLANETS = [
   },
   {
     name:'土星', en:'Saturn', color:0xeacb8b,
-    distance:9.58*AU, size:1.4, realSize:9.449,
+    distance:9.58*AU, size:1.4, realSize:9.449, diameterKm:116460,
     orbit:10759, rotation:0.45, tilt:26.73, eccentricity:0.054,
     texture:'https://threejs.org/examples/textures/planets/saturn.jpg',
     ring:true,
@@ -294,7 +305,7 @@ const PLANETS = [
   },
   {
     name:'天王星', en:'Uranus', color:0x9fd9e8,
-    distance:19.20*AU, size:1.0, realSize:4.007,
+    distance:19.20*AU, size:1.0, realSize:4.007, diameterKm:50724,
     orbit:30687, rotation:-0.72, tilt:97.77, eccentricity:0.047,
     texture:'https://threejs.org/examples/textures/planets/uranus.jpg',
     ring:true, ringInner:2.4, ringOuter:3.2, ringColor:0x556677,
@@ -305,7 +316,7 @@ const PLANETS = [
   },
   {
     name:'海王星', en:'Neptune', color:0x4060e0,
-    distance:30.05*AU, size:0.95, realSize:3.883,
+    distance:30.05*AU, size:0.95, realSize:3.883, diameterKm:49244,
     orbit:60190, rotation:0.67, tilt:28.32, eccentricity:0.009,
     texture:'https://threejs.org/examples/textures/planets/neptune.jpg',
     type:'冰巨行星 (Ice Giant)',
@@ -317,7 +328,7 @@ const PLANETS = [
 
 const MOON = {
   name:'月球', en:'Moon', parent:'地球',
-  distance:2.5, size:0.27, realSize:0.273,
+  distance:2.5, size:0.27, realSize:0.273, diameterKm:3474,
   orbit:27.3, rotation:27.3,
   texture:'https://threejs.org/examples/textures/planets/moon.jpg',
   facts:{ diameter:'3,474 km', mass:'7.35×10²² kg', day:'27.3 地球日', year:'27.3 地球日',
@@ -335,7 +346,8 @@ scene.background = new THREE.Color(0x000007);
 const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 5000);
 camera.position.set(0, 50, 90);
 
-/* 太阳辉光 sprite */
+/* 太阳辉光 sprite
+   sizeAttenuation:false 让辉光不随相机距离变化（始终保持视觉大小一致） */
 function makeGlowSprite(color, scale, opacity) {
   const c = document.createElement('canvas'); c.width = c.height = 256;
   const ctx = c.getContext('2d');
@@ -349,7 +361,8 @@ function makeGlowSprite(color, scale, opacity) {
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.SpriteMaterial({
     map: tex, transparent: true, opacity, depthWrite: false,
-    blending: THREE.AdditiveBlending
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: false  // 不随距离缩放 — 防止远处看太阳像巨大火球
   });
   const s = new THREE.Sprite(mat);
   s.scale.set(scale, scale, 1);
@@ -372,9 +385,10 @@ controls.minDistance = 1.5;
 controls.maxDistance = 5000;
 controls.target.set(0,0,0);
 
-/* 光照 — 弱环境光 + 强太阳直射，让晨昏线对比度明显 */
-scene.add(new THREE.AmbientLight(0x8088aa, 0.25));
-const sunLight = new THREE.PointLight(0xffffff, 6.0, 0, 1.5);
+/* 光照 — decay=0 让 PointLight 像平行光（远距离不衰减）
+   强太阳直射 + 适度环境光，晨昏线清晰 */
+scene.add(new THREE.AmbientLight(0x8090b0, 0.35));
+const sunLight = new THREE.PointLight(0xffffff, 3.5, 0, 0);  // distance=0, decay=0: 平行光效果
 sunLight.position.set(0,0,0);
 scene.add(sunLight);
 
@@ -465,9 +479,10 @@ async function makeSun() {
     fact:'<b>太阳</b>是太阳系的中心天体，占系统总质量的 99.86%。<br>每秒将约 600 万吨氢聚变成氦。<br>光从太阳表面到达地球约需 8 分 20 秒。' };
   scene.add(mesh);
 
-  const glow1 = makeGlowSprite('rgba(255,200,80,1.0)',  SUN_DEMO*3.0, 0.85);
-  const glow2 = makeGlowSprite('rgba(255,160,40,1.0)',  SUN_DEMO*5.0, 0.55);
-  const glow3 = makeGlowSprite('rgba(255,120,30,1.0)',  SUN_DEMO*8.5, 0.30);
+  // 辉光尺寸（按比例：1.5×/2.0×/2.8× 当前太阳半径）
+  const glow1 = makeGlowSprite('rgba(255,200,80,1.0)',  SUN_DEMO*1.5, 0.7);
+  const glow2 = makeGlowSprite('rgba(255,160,40,1.0)',  SUN_DEMO*2.0, 0.45);
+  const glow3 = makeGlowSprite('rgba(255,120,30,1.0)',  SUN_DEMO*2.8, 0.22);
   mesh.add(glow1); mesh.add(glow2); mesh.add(glow3);
   sunGlowSprites.push(glow1, glow2, glow3);
 
@@ -591,14 +606,12 @@ let realistic = false;
 const _orbitLines = [];
 
 /** 演示/真实模式下的尺寸计算
- *  演示模式：data.size（艺术夸张值，水星 0.42 → 看见）
- *  真实模式：realSize × PLANET_LINEAR_SCALE（地球 0.18），最小 MIN_PLANET_RADIUS
- *           最大 clip 到太阳 60%（避免吞掉木星/土星）
+ *  演示模式：data.size（艺术夸张值）
+ *  真实模式：realSize^0.4（power 压缩，详见常量定义）
  */
 function getPlanetDisplayRadius(p) {
   if (realistic) {
-    const r = Math.max(MIN_PLANET_RADIUS, p.realSize * PLANET_LINEAR_SCALE);
-    return Math.min(r, SUN_REAL * 0.6);
+    return realPlanetRadius(p.realSize, p.name);
   } else {
     return p.size;
   }
@@ -637,8 +650,8 @@ function scaleScene(){
   // 太阳几何尺寸固定为 SUN_DEMO，scale 调整显示
   sun.scale.setScalar(sunRadius / SUN_DEMO);
 
-  // 同步更新辉光尺寸（基于实际显示半径）
-  const glowScales = [sunRadius*3.0, sunRadius*5.0, sunRadius*8.5];
+  // 辉光尺寸：用相对当前显示太阳半径的小倍数（视觉占比 1.5×~3×）
+  const glowScales = [sunRadius*1.5, sunRadius*2.0, sunRadius*2.8];
   sunGlowSprites.forEach((s,i)=> s.scale.set(glowScales[i], glowScales[i], 1));
 
   // 行星
@@ -654,12 +667,12 @@ function scaleScene(){
   if (moon) {
     const earth = planetObjs[2];
     const earthRadius = getPlanetDisplayRadius(earth.data);
-    // 真实模式月球 = realSize × scale，最小 0.1；演示模式 = MOON.size
-    const moonTarget = realistic ? Math.max(0.1, MOON.realSize * PLANET_LINEAR_SCALE * 0.85)
+    // 真实模式月球 = realSize^0.4；演示模式 = MOON.size
+    const moonTarget = realistic ? realPlanetRadius(MOON.realSize, MOON.name)
                                   : MOON.size;
     moon.mesh.scale.setScalar(moonTarget / MOON.size);
-    // 月球距离：演示模式保持 MOON.distance 比例；真实模式 = 地球半径 × 4（视觉可见）
-    const moonDist = realistic ? earthRadius * 4.0 : MOON.distance * (earthRadius / earth.data.size);
+    // 月球距离：演示模式保持 MOON.distance 比例；真实模式 = 地球半径 × 6（视觉可见）
+    const moonDist = realistic ? earthRadius * 6.0 : MOON.distance * (earthRadius / earth.data.size);
     moon.mesh.position.set(moonDist, 0, 0);
   }
 
@@ -867,7 +880,7 @@ toggleLabels.addEventListener('change', ()=>{
 });
 toggleStars.addEventListener('change', ()=>{ stars.visible = toggleStars.checked; });
 toggleBloom.addEventListener('change', ()=>{
-  const baseOp = [0.85, 0.55, 0.30];
+  const baseOp = [0.7, 0.45, 0.22];
   sunGlowSprites.forEach((s,i)=>{
     s.visible = toggleBloom.checked;
     if (toggleBloom.checked) s.material.opacity = baseOp[i];
@@ -1027,26 +1040,10 @@ function tick(){
 
   // 追踪（修复 #3/#4: 追踪中可以调节视角，OrbitControls 继续工作）
   if (trackingTarget) {
+    // controls.target 锁定到目标，OrbitControls 围绕目标工作（滚轮/拖拽都正常）
     const targetPos = trackingTarget.getWorldPosition(new THREE.Vector3());
-    const r = trackingTarget.userData.isSun
-      ? getSunDisplayRadius()
-      : getPlanetDisplayRadius(trackingTarget.userData.data);
-    // 相机相对目标保持固定偏移（OrbitControls 用户拖拽会修改 camera.position，
-    // 但 controls.target 始终锁定在目标上，所以旋转/缩放都围绕目标工作）
     controls.target.lerp(targetPos, 0.1);
-
-    // 如果没有相机动画，平滑让相机"靠近"目标
-    // 但因为 OrbitControls 已经接管，保持相机当前位置即可
-    // （用户可以自由滚轮缩放、拖拽旋转视角）
-    if (!camAnim) {
-      const dist = camera.position.distanceTo(targetPos);
-      // 太远时拉近一点（防止用户飞到太空）
-      const maxDist = r * 40;
-      if (dist > maxDist) {
-        const dir = camera.position.clone().sub(targetPos).normalize();
-        camera.position.copy(targetPos.clone().add(dir.multiplyScalar(maxDist)));
-      }
-    }
+    // 注意：相机位置完全由 OrbitControls 管理，不强制拉近/拉远
   }
 
   controls.update();

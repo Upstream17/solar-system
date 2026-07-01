@@ -4,15 +4,14 @@ import * as THREE from 'three';
 import { initScene } from './scene.js';
 import { initLighting } from './lighting.js';
 import { makeSun, makePlanet, makeMoon, makeOrbit } from './planets.js';
-import { scaleScene } from './scale.js';
+import { scaleScene, getDisplayDistance } from './scale.js';
 import { initTracking, tickCameraAnim, tickTracking } from './tracking.js';
 import {
   initSliders, initToggles, bindStarsToggle,
   initInfoPanel, initLegend, initTrackingStopButton, initSceneClick,
   getSpeedFactor
 } from './ui.js';
-import { PLANETS, SUN_DEMO, MOON } from './constants.js';
-import { getDisplayDistance } from './scale.js';
+import { PLANETS, SUN_R, MOON, DIST_SCALE } from './constants.js';
 
 const SIM_DAYS_PER_SEC = 5;
 let elapsedDays = 0;
@@ -48,8 +47,8 @@ async function init() {
     } catch (e) { console.error('moon failed:', e); }
     window.__moon = moonObj;
 
-    // 6. 太阳轨道环（艺术装饰）
-    scene.add(makeOrbit(SUN_DEMO*1.5));
+    // 6. 太阳轨道环（艺术装饰 — 紧贴太阳表面）
+    scene.add(makeOrbit(SUN_R * 1.05));
 
     // 7. 缩放初始化
     scaleScene(scene, camera, controls);

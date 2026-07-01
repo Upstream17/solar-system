@@ -1,7 +1,7 @@
 /* ui.js — UI 控件 + 交互 */
 
 import * as THREE from 'three';
-import { scaleScene, setRealistic } from './scale.js';
+import { scaleScene } from './scale.js';
 import { sunGlowSprites } from './planets.js';
 import { startTracking, stopTracking, getTrackingTarget } from './tracking.js';
 
@@ -51,12 +51,7 @@ export function initToggles(scene, camera, controls) {
   const toggleOrbits   = $('toggle-orbits');
   const toggleLabels   = $('toggle-labels');
   const toggleBloom    = $('toggle-bloom');
-  const toggleRealistic= $('toggle-realistic');
 
-  toggleRealistic.addEventListener('change', ()=>{
-    setRealistic(toggleRealistic.checked);
-    scaleScene(scene, camera, controls);
-  });
   toggleOrbits.addEventListener('change', ()=>{
     scene.traverse(o=>{ if (o.userData?.isOrbit) o.visible = toggleOrbits.checked; });
   });
@@ -64,8 +59,8 @@ export function initToggles(scene, camera, controls) {
     scene.traverse(o=>{ if (o.userData?.isLabel) o.visible = toggleLabels.checked; });
   });
 
-  // 辉光开关：修复 #4，降低 opacity
-  const baseOp = [0.4, 0.25, 0.12];
+  // 辉光开关：opacity 整体降低，避免一打开就照亮整个太阳系
+  const baseOp = [0.35, 0.22, 0.10];
   toggleBloom.addEventListener('change', ()=>{
     sunGlowSprites.forEach((s,i)=>{
       s.visible = toggleBloom.checked;

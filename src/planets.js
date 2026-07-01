@@ -1,7 +1,7 @@
 /* planets.js — 太阳 + 行星 + 月球 创建 */
 
 import * as THREE from 'three';
-import { SUN_DEMO, MOON } from './constants.js';
+import { SUN_R, PLANETS, MOON } from './constants.js';
 import { safeTexture } from './textures.js';
 import { makeGlowSprite, GLOW_BASE_OPACITY, GLOW_SCALE_RATIO } from './lighting.js';
 
@@ -53,34 +53,35 @@ export const sunGlowSprites = [];
 /* ===== 太阳 ===== */
 export async function makeSun(scene) {
   const sunTex = await safeTexture('https://threejs.org/examples/textures/planets/sun.jpg', 0xffcc55);
-  const geo = new THREE.SphereGeometry(SUN_DEMO, 64, 64);
+  // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 16.8）
+  const geo = new THREE.SphereGeometry(1.0, 64, 64);
   const mat = new THREE.MeshBasicMaterial({ map: sunTex });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.userData = { isSun:true, name:'太阳', size:SUN_DEMO, type:'恒星 G2V 型 · 黄矮星',
+  mesh.userData = { isSun:true, name:'太阳', size:SUN_R, type:'恒星 G2V 型 · 黄矮星',
     facts:{ diameter:'1,392,700 km', mass:'1.99×10³⁰ kg', age:'46 亿年',
             temp:'表面 5,500 °C · 核心 1,500 万 °C', gravity:'274 m/s²', luminosity:'3.83×10²⁶ W' },
     fact:'<b>太阳</b>是太阳系的中心天体，占系统总质量的 99.86%。<br>每秒将约 600 万吨氢聚变成氦。<br>光从太阳表面到达地球约需 8 分 20 秒。' };
   scene.add(mesh);
 
-  // 辉光（用当前显示半径初始化）
-  const initRadius = SUN_DEMO;  // scaleScene 会重新调整
-  const glow1 = makeGlowSprite('rgba(255,200,80,1.0)', initRadius*GLOW_SCALE_RATIO[0], GLOW_BASE_OPACITY[0]);
-  const glow2 = makeGlowSprite('rgba(255,160,40,1.0)', initRadius*GLOW_SCALE_RATIO[1], GLOW_BASE_OPACITY[1]);
-  const glow3 = makeGlowSprite('rgba(255,120,30,1.0)', initRadius*GLOW_SCALE_RATIO[2], GLOW_BASE_OPACITY[2]);
+  // 辉光（用真实 SUN_R 初始化，scaleScene 会保持不变）
+  const glow1 = makeGlowSprite('rgba(255,200,80,1.0)', SUN_R*GLOW_SCALE_RATIO[0], GLOW_BASE_OPACITY[0]);
+  const glow2 = makeGlowSprite('rgba(255,160,40,1.0)', SUN_R*GLOW_SCALE_RATIO[1], GLOW_BASE_OPACITY[1]);
+  const glow3 = makeGlowSprite('rgba(255,120,30,1.0)', SUN_R*GLOW_SCALE_RATIO[2], GLOW_BASE_OPACITY[2]);
   mesh.add(glow1); mesh.add(glow2); mesh.add(glow3);
   sunGlowSprites.push(glow1, glow2, glow3);
 
-  addLabel(mesh, '☀ 太阳', SUN_DEMO*1.6);
+  addLabel(mesh, '☀ 太阳', 1.5);
   return mesh;
 }
 
 /* ===== 行星 ===== */
 export async function makePlanet(scene, p) {
   const tex = await safeTexture(p.texture, p.color);
-  const geo = new THREE.SphereGeometry(p.size, 48, 48);
+  // 几何尺寸 = realSize（地球 = 1.0），与真实比例一致
+  const geo = new THREE.SphereGeometry(p.realSize, 48, 48);
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:0.85, metalness:0.05,
     emissive: new THREE.Color(p.color).multiplyScalar(0.04),
-    emissiveIntensity: 0.05  // 极弱自发光：保留质感但晨昏线对比明显
+    emissiveIntensity: 0.05
   });
   if (p.bumpMap) {
     const bump = await safeTexture(p.bumpMap, 0x808080);
@@ -90,7 +91,7 @@ export async function makePlanet(scene, p) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.userData = { isPlanet:true, data:p, name:p.name };
 
-  // 倾斜容器 → 公转轨道 + 自转轴倾角
+  // 倾斜容器
   const pivot = new THREE.Object3D();
   const tilt = new THREE.Object3D();
   tilt.rotation.z = THREE.MathUtils.degToRad(p.tilt);
@@ -98,7 +99,7 @@ export async function makePlanet(scene, p) {
   tilt.add(mesh);
   pivot.add(tilt);
 
-  // 起始位置（圆轨道）
+  // 起始位置（scaleScene 会按真实 AU 距离设置）
   const a = p.distance;
   const theta0 = Math.random()*Math.PI*2;
   pivot.position.set(Math.cos(theta0)*a, 0, Math.sin(theta0)*a);
@@ -106,12 +107,12 @@ export async function makePlanet(scene, p) {
 
   // 土星/天王星环
   if (p.ring) {
-    const ringGeo = new THREE.RingGeometry(p.size*1.4, p.size*(p.ringOuter||2.2), 96);
+    const ringGeo = new THREE.RingGeometry(p.realSize*1.4, p.realSize*(p.ringOuter||2.2), 96);
     const pos = ringGeo.attributes.position;
     const uv = ringGeo.attributes.uv;
     for (let i=0;i<pos.count;i++){
       const x = pos.getX(i), y = pos.getY(i);
-      uv.setXY(i, (Math.sqrt(x*x+y*y) - p.size*1.4) / (p.size*((p.ringOuter||2.2)-1.4)), 0.5);
+      uv.setXY(i, (Math.sqrt(x*x+y*y) - p.realSize*1.4) / (p.realSize*((p.ringOuter||2.2)-1.4)), 0.5);
     }
     const ringMat = new THREE.MeshBasicMaterial({
       color:p.ringColor||0xc9b896, side:THREE.DoubleSide, transparent:true, opacity:0.75
@@ -121,14 +122,14 @@ export async function makePlanet(scene, p) {
     mesh.add(ring);
   }
 
-  addLabel(mesh, p.name, p.size*1.6);
+  addLabel(mesh, p.name, p.realSize * 1.6);
   return { pivot, mesh, data:p };
 }
 
 /* ===== 月球 ===== */
 export async function makeMoon() {
   const tex = await safeTexture(MOON.texture, 0xaaaaaa);
-  const geo = new THREE.SphereGeometry(MOON.size, 32, 32);
+  const geo = new THREE.SphereGeometry(MOON.realSize, 32, 32);
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:1,
     emissive: new THREE.Color(0xaaaaaa).multiplyScalar(0.06), emissiveIntensity: 0.08 });
   const mesh = new THREE.Mesh(geo, mat);

@@ -1,47 +1,34 @@
-/* constants.js — 真实天文数据 + 演示/真实模式缩放公式 */
+/* constants.js — 真实天文数据 + NASA 标准缩放 */
 
 /* ============================================================
-   1. 真实天文数据 (NASA fact sheet)
-   - size        = 演示模式基准半径（艺术夸张，已含视觉友好）
+   真实天文数据 (NASA fact sheet)
+   - size        = 演示模式基准半径（艺术夸张）
    - realSize    = 真实半径（地球 = 1.0，NASA 公约）
-   - diameterKm  = NASA 直径 (km)，用于科普展示
+   - diameterKm  = NASA 直径 (km)
    - distance    = 与太阳的距离 (AU)
    ============================================================ */
-export const AU = 14;
+export const AU = 1;  // 单位基准（不再乘 14，所有距离按 AU 直接算）
 
-// ===== 演示模式 =====
-// 太阳偏小（保证水星不穿模），行星用 data.size（艺术夸张值）
-export const SUN_DEMO = 1.5;
+// ===== NASA 标准距离缩放 =====
+// 1 AU = K 世界单位
+// 选定 K 让水星不穿模：SUN_R + R_mercury < 0.39 * K → K > (16.8 + 0.38) / 0.39 ≈ 44
+// 取 K=50 给点余量
+export const DIST_SCALE = 50;
 
-// ===== 真实模式（power 压缩 + 大小顺序对 — 工业级 demo 做法）=====
-// 体积不能既"真实"又"装得下"（太阳≈109×地球，海王星≈30×地球轨道）。
-// 折中：power 压缩（EXP=0.4）+ 硬编码水星最小值，保证不穿模
-//   太阳 4.0
-//   水星 0.5 (硬编码)
-//   火星 0.78 / 金星 0.98 / 地球 1.0
-//   海王星 1.72 / 天王星 1.74 / 土星 2.46 / 木星 2.63
-//   太阳/木星 = 1.52× ✓
-//   大小顺序：水星<火星<金星<地球<海王星<天王星<土星<木星<太阳（与真实完全一致 ✓）
-// 距离按真实 AU 比例：DIST_SCALE_REAL = 12
-export const SUN_REAL = 4.0;
-export const PLANET_POWER_EXP = 0.4;
-export const DIST_SCALE_REAL = 12;
-export const SUN_REAL_MAX_PLANET_RATIO = 0.85;  // 最大行星不超过太阳 85%
-export const MERCURY_MIN_RADIUS = 0.5;          // 水星最小半径（保证不穿模）
+// ===== 太阳半径 =====
+// 真实太阳/木星 = 9.7×。这里取 1.5× 让视觉上太阳明显大，但不至于吞掉水星轨道
+// 太阳 R = 16.8
+export const SUN_R = 16.8;
 
-/** 真实模式行星半径：realSize^0.4
- *  水星最小 0.5，最大不超过太阳 85%
- */
-export function realPlanetRadius(realSize, name) {
-  if (name === '水星') return MERCURY_MIN_RADIUS;
-  const r = Math.pow(realSize, PLANET_POWER_EXP);
-  return Math.min(r, SUN_REAL * SUN_REAL_MAX_PLANET_RATIO);
-}
+// ===== 行星半径（按真实相对大小，单位：地球半径）=====
+// 真实数据：
+//   水星 0.383 / 金星 0.949 / 地球 1.000 / 火星 0.532
+//   木星 11.209 / 土星 9.449 / 天王星 4.007 / 海王星 3.883
 
 export const PLANETS = [
   {
     name:'水星', en:'Mercury', color:0xb5a187,
-    distance:0.39*AU, size:0.42, realSize:0.383, diameterKm:4879,
+    distance:0.39, size:0.383, realSize:0.383, diameterKm:4879,
     orbit:88,   rotation:58.6,  tilt:0.03, eccentricity:0.205,
     texture:'https://threejs.org/examples/textures/planets/mercury.jpg',
     type:'类地行星 · 岩石行星',
@@ -51,7 +38,7 @@ export const PLANETS = [
   },
   {
     name:'金星', en:'Venus', color:0xe8c084,
-    distance:0.72*AU, size:0.95, realSize:0.949, diameterKm:12104,
+    distance:0.72, size:0.949, realSize:0.949, diameterKm:12104,
     orbit:225,  rotation:-243,  tilt:177.4, eccentricity:0.007,
     texture:'https://threejs.org/examples/textures/planets/venus.jpg',
     type:'类地行星 · 岩石行星',
@@ -61,7 +48,7 @@ export const PLANETS = [
   },
   {
     name:'地球', en:'Earth', color:0x3a8fd7,
-    distance:1.00*AU, size:1.00, realSize:1.000, diameterKm:12742,
+    distance:1.00, size:1.000, realSize:1.000, diameterKm:12742,
     orbit:365.25, rotation:1,   tilt:23.44, eccentricity:0.017,
     texture:'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
     bumpMap:'https://threejs.org/examples/textures/planets/earth_normal_2048.jpg',
@@ -72,7 +59,7 @@ export const PLANETS = [
   },
   {
     name:'火星', en:'Mars', color:0xc1440e,
-    distance:1.52*AU, size:0.55, realSize:0.532, diameterKm:6779,
+    distance:1.52, size:0.532, realSize:0.532, diameterKm:6779,
     orbit:687,  rotation:1.03, tilt:25.19, eccentricity:0.093,
     texture:'https://threejs.org/examples/textures/planets/mars.jpg',
     type:'类地行星 · 岩石行星',
@@ -82,7 +69,7 @@ export const PLANETS = [
   },
   {
     name:'木星', en:'Jupiter', color:0xd6a878,
-    distance:5.20*AU, size:1.6, realSize:11.209, diameterKm:139820,
+    distance:5.20, size:11.21, realSize:11.209, diameterKm:139820,
     orbit:4333, rotation:0.41, tilt:3.13, eccentricity:0.048,
     texture:'https://threejs.org/examples/textures/planets/jupiter.jpg',
     type:'气态巨行星 (Gas Giant)',
@@ -92,7 +79,7 @@ export const PLANETS = [
   },
   {
     name:'土星', en:'Saturn', color:0xeacb8b,
-    distance:9.58*AU, size:1.4, realSize:9.449, diameterKm:116460,
+    distance:9.58, size:9.45, realSize:9.449, diameterKm:116460,
     orbit:10759, rotation:0.45, tilt:26.73, eccentricity:0.054,
     texture:'https://threejs.org/examples/textures/planets/saturn.jpg',
     ring:true,
@@ -104,7 +91,7 @@ export const PLANETS = [
   },
   {
     name:'天王星', en:'Uranus', color:0x9fd9e8,
-    distance:19.20*AU, size:1.0, realSize:4.007, diameterKm:50724,
+    distance:19.20, size:4.01, realSize:4.007, diameterKm:50724,
     orbit:30687, rotation:-0.72, tilt:97.77, eccentricity:0.047,
     texture:'https://threejs.org/examples/textures/planets/uranus.jpg',
     ring:true, ringInner:2.4, ringOuter:3.2, ringColor:0x556677,
@@ -115,7 +102,7 @@ export const PLANETS = [
   },
   {
     name:'海王星', en:'Neptune', color:0x4060e0,
-    distance:30.05*AU, size:0.95, realSize:3.883, diameterKm:49244,
+    distance:30.05, size:3.88, realSize:3.883, diameterKm:49244,
     orbit:60190, rotation:0.67, tilt:28.32, eccentricity:0.009,
     texture:'https://threejs.org/examples/textures/planets/neptune.jpg',
     type:'冰巨行星 (Ice Giant)',
@@ -125,12 +112,23 @@ export const PLANETS = [
   },
 ];
 
+/* 月球（地球的卫星） */
 export const MOON = {
   name:'月球', en:'Moon', parent:'地球',
-  distance:2.5, size:0.27, realSize:0.273, diameterKm:3474,
+  distance:0.6, size:0.27, realSize:0.273, diameterKm:3474,
   orbit:27.3, rotation:27.3,
   texture:'https://threejs.org/examples/textures/planets/moon.jpg',
   facts:{ diameter:'3,474 km', mass:'7.35×10²² kg', day:'27.3 地球日', year:'27.3 地球日',
           temp:'-173 ~ 127 °C', moons:'0', gravity:'1.62 m/s²' },
   fact:'<b>月球</b>是地球唯一的天然卫星，约形成于 45 亿年前。<br>它的潮汐作用稳定了地球自转轴。<br>月球正以每年 3.8 cm 的速度远离地球。'
+};
+
+/* 行星尺寸信息（用于太阳相对大小比较）*/
+export const SUN_FACTS = {
+  diameterKm: 1392700,
+  mass: '1.99×10³⁰ kg',
+  age: '46 亿年',
+  temp: '表面 5,500 °C · 核心 1,500 万 °C',
+  gravity: '274 m/s²',
+  luminosity: '3.83×10²⁶ W'
 };

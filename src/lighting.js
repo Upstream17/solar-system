@@ -45,7 +45,7 @@ export function initLighting(scene) {
 }
 
 /** 太阳辉光 sprite 的基础 opacity（按 toggleBloom 控制） */
-export const GLOW_BASE_OPACITY = [0.4, 0.25, 0.12];  // 修复 #4: 比之前更弱
+export const GLOW_BASE_OPACITY = [0.35, 0.22, 0.10];  // 偏低，避免一打开辉光就照亮整个太阳系
 
 /** 辉光尺寸比例（相对当前太阳显示半径） */
-export const GLOW_SCALE_RATIO = [1.3, 1.7, 2.3];
+export const GLOW_SCALE_RATIO = [1.2, 1.6, 2.2];

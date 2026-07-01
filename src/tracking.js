@@ -17,6 +17,7 @@ export function getCamAnim() { return camAnim; }
 
 export function startTracking(mesh, withFocus=true) {
   trackingTarget = mesh;
+  resetTrackingOffset();  // 切换目标时重置偏移缓存
   updateTrackingBadge();
   updateLegendHighlight();
   if (withFocus) focusOn(mesh);
@@ -60,8 +61,9 @@ function focusOn(mesh) {
   const displayR = mesh.userData.isSun
     ? getSunDisplayRadius()
     : getPlanetDisplayRadius(mesh.userData.data);
-  const offset = displayR * 4 + 4;
-  const target = wp.clone().add(new THREE.Vector3(offset, offset*0.6, offset));
+  // 相机距离目标 = max(行星半径 × 8, 6) — 留出足够空间看全行星
+  const offset = Math.max(displayR * 8, 6);
+  const target = wp.clone().add(new THREE.Vector3(offset, offset*0.5, offset*0.8));
   animateCamera(target, wp);
 }
 
@@ -87,13 +89,38 @@ export function tickCameraAnim(deltaReal) {
   }
 }
 
-/** 主循环里调用：追踪时锁定 target 到目标 */
+/** 主循环里调用：追踪时相机跟随目标平移
+ *  修复 #2 真正根因：只改 target 不改 camera 会让 OrbitControls 误判用户缩放
+ *  正确做法：让相机与目标保持相对位置（相机跟着 target 一起移动），
+ *  这样用户滚轮缩放时改的是"相机与目标的相对距离"，不会被打断
+ */
+const _targetOffset = new THREE.Vector3();  // 缓存 camera - target 偏移
+let _trackingOffsetInitialized = false;
+
 export function tickTracking() {
   if (trackingTarget) {
     const targetPos = trackingTarget.getWorldPosition(new THREE.Vector3());
-    _controls.target.lerp(targetPos, 0.1);
-    // 相机位置完全由 OrbitControls 管理
+
+    if (!_trackingOffsetInitialized) {
+      // 第一次进入追踪：记录当前相机与 target 的偏移
+      _targetOffset.copy(_camera.position).sub(_controls.target);
+      _trackingOffsetInitialized = true;
+    }
+
+    // target 平滑跟随目标位置
+    _controls.target.lerp(targetPos, 0.15);
+
+    // 相机跟随 target 平移（保持相机-target 偏移不变）
+    // 这样 OrbitControls 的内部状态不会被打断
+    _camera.position.copy(_controls.target).add(_targetOffset);
+  } else {
+    _trackingOffsetInitialized = false;
   }
+}
+
+/** 重置追踪偏移缓存（用户切换目标时调用）*/
+export function resetTrackingOffset() {
+  _trackingOffsetInitialized = false;
 }
 
 /* ESC 取消追踪 */

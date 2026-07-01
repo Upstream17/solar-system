@@ -53,8 +53,8 @@ export const sunGlowSprites = [];
 /* ===== 太阳 ===== */
 export async function makeSun(scene) {
   const sunTex = await safeTexture('https://threejs.org/examples/textures/planets/sun.jpg', 0xffcc55);
-  // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 16.8）
-  const geo = new THREE.SphereGeometry(1.0, 64, 64);
+  // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 1.0）
+  const geo = new THREE.SphereGeometry(1.0, 48, 48);
   const mat = new THREE.MeshBasicMaterial({ map: sunTex });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.userData = { isSun:true, name:'太阳', size:SUN_R, type:'恒星 G2V 型 · 黄矮星',
@@ -63,12 +63,10 @@ export async function makeSun(scene) {
     fact:'<b>太阳</b>是太阳系的中心天体，占系统总质量的 99.86%。<br>每秒将约 600 万吨氢聚变成氦。<br>光从太阳表面到达地球约需 8 分 20 秒。' };
   scene.add(mesh);
 
-  // 辉光（用真实 SUN_R 初始化，scaleScene 会保持不变）
-  const glow1 = makeGlowSprite('rgba(255,200,80,1.0)', SUN_R*GLOW_SCALE_RATIO[0], GLOW_BASE_OPACITY[0]);
-  const glow2 = makeGlowSprite('rgba(255,160,40,1.0)', SUN_R*GLOW_SCALE_RATIO[1], GLOW_BASE_OPACITY[1]);
-  const glow3 = makeGlowSprite('rgba(255,120,30,1.0)', SUN_R*GLOW_SCALE_RATIO[2], GLOW_BASE_OPACITY[2]);
-  mesh.add(glow1); mesh.add(glow2); mesh.add(glow3);
-  sunGlowSprites.push(glow1, glow2, glow3);
+  // 辉光（tycho.ioz 风格：单一 sprite，整体小而透明）
+  const glow = makeGlowSprite('rgba(255,220,150,1.0)', SUN_R * GLOW_SCALE_RATIO, GLOW_BASE_OPACITY);
+  mesh.add(glow);
+  sunGlowSprites.push(glow);
 
   addLabel(mesh, '☀ 太阳', 1.5);
   return mesh;

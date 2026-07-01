@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import { scaleScene } from './scale.js';
 import { sunGlowSprites } from './planets.js';
-import { startTracking, stopTracking, getTrackingTarget } from './tracking.js';
+import { GLOW_BASE_OPACITY } from './lighting.js';
+import { startTracking, stopTracking, getFocusTarget } from './tracking.js';
 
 const $ = id => document.getElementById(id);
 
@@ -59,12 +60,12 @@ export function initToggles(scene, camera, controls) {
     scene.traverse(o=>{ if (o.userData?.isLabel) o.visible = toggleLabels.checked; });
   });
 
-  // 辉光开关：opacity 整体降低，避免一打开就照亮整个太阳系
-  const baseOp = [0.35, 0.22, 0.10];
+  // 辉光开关：tycho.ioz 风格，单一 sprite
+  const baseOp = GLOW_BASE_OPACITY;
   toggleBloom.addEventListener('change', ()=>{
-    sunGlowSprites.forEach((s,i)=>{
+    sunGlowSprites.forEach((s)=>{
       s.visible = toggleBloom.checked;
-      s.material.opacity = toggleBloom.checked ? baseOp[i] : 0;
+      s.material.opacity = toggleBloom.checked ? baseOp : 0;
     });
   });
 }
@@ -112,7 +113,7 @@ export function initLegend() {
       ${m.userData.name}`;
     item.onclick = (e)=>{
       e.stopPropagation();
-      if (getTrackingTarget() === m) {
+      if (getFocusTarget() === m) {
         stopTracking();
       } else {
         startTracking(m, true);
@@ -142,7 +143,7 @@ export function initSceneClick(renderer, camera, getClickable) {
     const hits = raycaster.intersectObjects(getClickable(), false);
     if (hits.length) {
       const m = hits[0].object;
-      if (getTrackingTarget() === m) {
+      if (getFocusTarget() === m) {
         stopTracking();
       } else {
         startTracking(m, true);

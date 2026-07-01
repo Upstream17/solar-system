@@ -3,8 +3,8 @@
 import * as THREE from 'three';
 
 /* 太阳辉光 sprite
-   sizeAttenuation:true（默认）让辉光随相机距离缩放 — 防止拉远时辉光比太阳还大
-   整体 opacity 调到较低值（0.4/0.25/0.12），避免打开辉光就照亮整个太阳系 */
+   sizeAttenuation:true 让辉光跟随相机距离缩放
+   tycho.ioz 风格：辉光小且不挡视线（太阳本体极小）*/
 export function makeGlowSprite(color, scale, opacity) {
   const c = document.createElement('canvas'); c.width = c.height = 256;
   const ctx = c.getContext('2d');
@@ -19,7 +19,7 @@ export function makeGlowSprite(color, scale, opacity) {
   const mat = new THREE.SpriteMaterial({
     map: tex, transparent: true, opacity, depthWrite: false,
     blending: THREE.AdditiveBlending,
-    sizeAttenuation: true  // 关键修复 #4: 随距离缩放，远处辉光不会变成大光晕
+    sizeAttenuation: true
   });
   const s = new THREE.Sprite(mat);
   s.scale.set(scale, scale, 1);
@@ -36,7 +36,6 @@ export function initLighting(scene) {
   scene.add(ambient);
 
   // PointLight distance=0 + decay=0 = 等效平行光（远距离不衰减）
-  // 强度 3.5 已足够亮，slider 可调
   const sunLight = new THREE.PointLight(0xffffff, 3.5, 0, 0);
   sunLight.position.set(0,0,0);
   scene.add(sunLight);
@@ -44,8 +43,8 @@ export function initLighting(scene) {
   return { sunLight, ambient };
 }
 
-/** 太阳辉光 sprite 的基础 opacity（按 toggleBloom 控制） */
-export const GLOW_BASE_OPACITY = [0.35, 0.22, 0.10];  // 偏低，避免一打开辉光就照亮整个太阳系
+/** 太阳辉光 sprite 的基础 opacity（tycho.ioz 风格：偏小，不挡视线） */
+export const GLOW_BASE_OPACITY = 0.55;  // 单一 sprite，整体半透明
 
-/** 辉光尺寸比例（相对当前太阳显示半径） */
-export const GLOW_SCALE_RATIO = [1.2, 1.6, 2.2];
+/** 辉光尺寸比例（相对太阳显示半径） */
+export const GLOW_SCALE_RATIO = 1.5;  // 单一 sprite，太阳 1.5× 半径

@@ -51,9 +51,9 @@ export function initScene() {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
-  // 修复 #2: minDistance 设小（0.1），让用户能贴脸看地球表面细节不被拽回
-  controls.minDistance = 0.1;
-  controls.maxDistance = 5000;
+  // tycho.ioz 风格：相机可在很近（看太阳细节）和很远（看海王星）之间自由切换
+  controls.minDistance = 0.5;
+  controls.maxDistance = 10000;
   controls.target.set(0,0,0);
 
   const stars = makeStars(8000, 200, 1.6);

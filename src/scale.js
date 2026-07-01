@@ -1,14 +1,14 @@
 /* scale.js — NASA 标准距离 + 真实体积 缩放
  *
- * 设计：
- *   - 距离按 AU 真实比例 (1 AU = 50 世界单位)
+ * 设计（基于 tycho.ioz 风格）：
+ *   - 距离按 AU 真实比例 (1 AU = 80 世界单位)
  *   - 行星半径按真实相对大小（地球 = 1.0）
- *   - 太阳半径 = 16.8（明显大于最大行星木星 11.21，比例 1.5×）
+ *   - 太阳半径 = 1.0（小光点，不挡视线）
  *   - 月球相对地球 = 0.27（真实）
  *
  * 验证（不穿模）：
- *   水星 d=19.5, r=0.383, 太阳=16.8 → 边距 +2.317 ✅
- *   海王星 d=1502, r=3.88, 太阳=16.8 → 边距 +1481.8 ✅
+ *   水星 d=31.2, r=0.383, 太阳=1.0 → 边距 +29.8 ✅
+ *   海王星 d=2404, r=3.88, 太阳=1.0 → 边距 +2399 ✅
  */
 
 import * as THREE from 'three';
@@ -35,10 +35,10 @@ export function getDisplayDistance(p) {
 
 /** 月球相对地球的距离 */
 export function getMoonDistanceFromEarth() {
-  return MOON.distance;  // 0.6
+  return MOON.distance;
 }
 
-/** 重新生成所有轨道线（按真实 AU 距离） */
+/** 重新生成所有轨道线 */
 export function regenerateOrbits(scene) {
   _orbitLines.forEach(l=>{ scene.remove(l); l.geometry.dispose(); });
   _orbitLines.length = 0;
@@ -51,38 +51,36 @@ export function regenerateOrbits(scene) {
   });
 }
 
-/** 初始化场景时调用：设置太阳 scale、行星 scale、位置、月球 */
+/** 初始化场景时调用：太阳 scale、行星 scale、位置、月球、相机 */
 export function scaleScene(scene, camera, controls) {
   const planetObjs = window.__planets;
   const sun = window.__sun;
   if (!planetObjs) return;
 
-  // 太阳几何尺寸固定为 1.0（基准单位），scale = SUN_R
-  const SUN_DEMO_GEOMETRY = 1.0;
-  sun.scale.setScalar(SUN_R / SUN_DEMO_GEOMETRY);
+  // 太阳几何尺寸 1.0，scale = SUN_R（=1.0，不缩放）
+  sun.scale.setScalar(SUN_R / 1.0);
 
-  // 辉光尺寸：相对太阳显示半径
-  const glowScales = GLOW_SCALE_RATIO.map(r => SUN_R * r);
-  sunGlowSprites.forEach((s,i)=> s.scale.set(glowScales[i], glowScales[i], 1));
+  // 辉光：单一 sprite，scale = SUN_R × GLOW_SCALE_RATIO
+  sunGlowSprites.forEach(s => s.scale.set(SUN_R * GLOW_SCALE_RATIO, SUN_R * GLOW_SCALE_RATIO, 1));
 
-  // 行星：scale = realSize / geometry_size
-  // 几何创建时是 data.size（也是 realSize，因为 size = realSize）
+  // 行星：geometry 已用 realSize 创建，无需 scale
   planetObjs.forEach(o=>{
-    o.mesh.scale.setScalar(1.0);  // geometry 创建时已用 realSize，无需缩放
+    o.mesh.scale.setScalar(1.0);
     o.pivot.position.setLength(getDisplayDistance(o.data));
   });
 
-  // 月球：相对地球
+  // 月球
   const moon = window.__moon;
   if (moon) {
-    moon.mesh.scale.setScalar(1.0);  // 月球几何 = 0.27 = realSize
+    moon.mesh.scale.setScalar(1.0);
     moon.mesh.position.set(MOON.distance, 0, 0);
   }
 
   regenerateOrbits(scene);
 
-  // 相机默认位置：能看到金星-地球-火星
-  // 默认位置：地球轨道 50，目标地球，相机距离 ~80
-  camera.position.set(0, 35, 85);
-  controls.target.set(DIST_SCALE, 0, 0);  // 看向地球（1 AU）
+  // 相机默认位置（tycho.ioz 风格：视野内能看到水星到火星）
+  // 海王星在 2404 单位远处，需要相机 ~3000 才能看到完整太阳系
+  // 默认相机放在能看到金星-火星的范围（用户滚轮拉远看外行星）
+  camera.position.set(0, 80, 250);
+  controls.target.set(0, 0, 0);
 }

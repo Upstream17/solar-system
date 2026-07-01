@@ -1,0 +1,20 @@
+# wrangler.toml — Cloudflare Pages config (no build step)
+# Project: solar-system
+# Deploy:
+#   wrangler pages deploy . --project-name=solar-system
+#
+# This file is used by the wrangler CLI (optional). If you use the
+# Cloudflare Dashboard "Connect to Git" flow, you don't need this file —
+# the dashboard will auto-detect index.html at the project root.
+
+name = "solar-system"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "."
+
+# No [build] section: this is a pure static site (no bundler/build step).
+# Wrangler will deploy index.html + src/ + all assets as-is.
+
+# Optional: custom domain (uncomment after adding the domain in Cloudflare Dashboard)
+# [[routes]]
+# pattern = "solar.upstream17.dev"
+# custom_domain = true

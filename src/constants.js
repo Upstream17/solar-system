@@ -112,10 +112,12 @@ export const PLANETS = [
 ];
 
 /* 月球（地球的卫星）
- * 真实距离 60 地球半径。演示距离按比例缩到 2.0（约 2×地球半径） */
+ * 真实：月地距离 60 地球半径，月球/地球半径 0.27
+ * 演示：距离 3.0（约 3×地球半径，视觉上月球清晰可见但不喧宾夺主）
+ *       大小 0.18（比真实 0.27 更小，让月球看上去明显小于地球）*/
 export const MOON = {
   name:'月球', en:'Moon', parent:'地球',
-  distance:2.0, size:0.27, realSize:0.273, diameterKm:3474,
+  distance:3.0, size:0.18, realSize:0.273, diameterKm:3474,
   orbit:27.3, rotation:27.3,
   texture:'https://threejs.org/examples/textures/planets/moon.jpg',
   facts:{ diameter:'3,474 km', mass:'7.35×10²² kg', day:'27.3 地球日', year:'27.3 地球日',

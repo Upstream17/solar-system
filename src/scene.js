@@ -45,7 +45,7 @@ export function initScene() {
   renderer.setSize(innerWidth, innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.3;  // 修 #5: 提亮整体曝光，让太阳更刺眼
   app.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);

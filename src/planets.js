@@ -3,7 +3,11 @@
 import * as THREE from 'three';
 import { SUN_R, PLANETS, MOON } from './constants.js';
 import { safeTexture } from './textures.js';
-import { makeGlowSprite, GLOW_BASE_OPACITY, GLOW_SCALE_RATIO } from './lighting.js';
+import {
+  makeGlowSprite,
+  GLOW_INNER_SCALE, GLOW_INNER_OPACITY, GLOW_INNER_COLOR,
+  GLOW_OUTER_SCALE, GLOW_OUTER_OPACITY, GLOW_OUTER_COLOR
+} from './lighting.js';
 
 /* 文字标签（Canvas 渲染 → Sprite） */
 function makeTextSprite(text, color='#9bd0ff') {
@@ -68,11 +72,13 @@ export async function makeSun(scene) {
     fact:'<b>太阳</b>是太阳系的中心天体，占系统总质量的 99.86%。<br>每秒将约 600 万吨氢聚变成氦。<br>光从太阳表面到达地球约需 8 分 20 秒。' };
   scene.add(mesh);
 
-  // 辉光（tycho.ioz 风格：单一 sprite，整体小而透明）
-  // 修复 #3: 辉光从暖黄色改为更亮更白的颜色 — 看上去更亮
-  const glow = makeGlowSprite('rgba(255,240,200,1.0)', SUN_R * GLOW_SCALE_RATIO, GLOW_BASE_OPACITY);
-  mesh.add(glow);
-  sunGlowSprites.push(glow);
+  // 辉光：双层 sprite（修 #5 HDR 观感）
+  // 修 #1: 外层 2.5× 太阳，"浅浅一层"覆盖；内层 1.2× 纯白刺眼核心
+  const glowInner = makeGlowSprite(GLOW_INNER_COLOR, SUN_R * GLOW_INNER_SCALE, GLOW_INNER_OPACITY);
+  const glowOuter = makeGlowSprite(GLOW_OUTER_COLOR, SUN_R * GLOW_OUTER_SCALE, GLOW_OUTER_OPACITY);
+  mesh.add(glowInner);
+  mesh.add(glowOuter);
+  sunGlowSprites.push(glowInner, glowOuter);
 
   addLabel(mesh, '☀ 太阳', 1.5);
   return mesh;
@@ -133,7 +139,8 @@ export async function makePlanet(scene, p) {
 /* ===== 月球 ===== */
 export async function makeMoon() {
   const tex = await safeTexture(MOON.texture, 0xaaaaaa);
-  const geo = new THREE.SphereGeometry(MOON.realSize, 32, 32);
+  // 几何尺寸 = MOON.size（演示值 0.18，明显小于地球 1.0）
+  const geo = new THREE.SphereGeometry(MOON.size, 32, 32);
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:1,
     emissive: new THREE.Color(0xaaaaaa).multiplyScalar(0.06), emissiveIntensity: 0.08 });
   const mesh = new THREE.Mesh(geo, mat);

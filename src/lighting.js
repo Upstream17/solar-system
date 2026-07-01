@@ -2,9 +2,10 @@
 
 import * as THREE from 'three';
 
-/* 太阳辉光 sprite
-   sizeAttenuation:true 让辉光跟随相机距离缩放
-   tycho.ioz 风格：辉光小且不挡视线（太阳本体极小）*/
+/* 太阳辉光 sprite（双层）
+   - sizeAttenuation:true 让辉光跟随相机距离缩放
+   - 修 #1：外层 2.5×太阳、淡色、浅淡覆盖；内层 1.2×、纯白、刺眼核心
+   - 修 #5：HDR 观感 = 纯白核心 + 淡黄外层（让眼睛有'刺眼'感）*/
 export function makeGlowSprite(color, scale, opacity) {
   const c = document.createElement('canvas'); c.width = c.height = 256;
   const ctx = c.getContext('2d');
@@ -31,8 +32,8 @@ export function makeGlowSprite(color, scale, opacity) {
  *  返回 { sunLight, ambient }
  */
 export function initLighting(scene) {
-  // 弱环境光 + 强太阳直射，晨昏线清晰
-  const ambient = new THREE.AmbientLight(0x8090b0, 0.35);
+  // 适度环境光 + 强太阳直射，晨昏线清晰
+  const ambient = new THREE.AmbientLight(0x8090b0, 0.45);
   scene.add(ambient);
 
   // PointLight distance=0 + decay=0 = 等效平行光（远距离不衰减）
@@ -43,8 +44,13 @@ export function initLighting(scene) {
   return { sunLight, ambient };
 }
 
-/** 太阳辉光 sprite 的基础 opacity（tycho.ioz 风格：偏小，不挡视线） */
-export const GLOW_BASE_OPACITY = 0.55;  // 单一 sprite，整体半透明
+/* === 太阳辉光：双层 sprite 实现 HDR 观感 === */
+// 修 #1: 外层从 1.5× 改为 2.5×（"浅浅一层"在太阳外面）
+// 修 #5: 纯白内层 + 淡黄外层 = 刺眼 HDR 观感
+export const GLOW_INNER_SCALE = 1.2;  // 纯白核心（紧贴太阳表面，比太阳稍大）
+export const GLOW_INNER_OPACITY = 1.0;  // 完全不透明，纯白
+export const GLOW_INNER_COLOR = 'rgba(255,255,255,1.0)';
 
-/** 辉光尺寸比例（相对太阳显示半径） */
-export const GLOW_SCALE_RATIO = 1.5;  // 单一 sprite，太阳 1.5× 半径
+export const GLOW_OUTER_SCALE = 2.5;  // 淡黄外层（修 #1：从 1.5 提到 2.5）
+export const GLOW_OUTER_OPACITY = 0.35;  // 偏低，浅浅覆盖
+export const GLOW_OUTER_COLOR = 'rgba(255,220,150,1.0)';

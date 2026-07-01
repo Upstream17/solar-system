@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { scaleScene } from './scale.js';
 import { sunGlowSprites } from './planets.js';
 import { GLOW_BASE_OPACITY } from './lighting.js';
-import { startTracking, stopTracking, getFocusTarget } from './tracking.js';
+import { startTracking, stopTracking } from './tracking.js';
 
 const $ = id => document.getElementById(id);
 
@@ -113,11 +113,8 @@ export function initLegend() {
       ${m.userData.name}`;
     item.onclick = (e)=>{
       e.stopPropagation();
-      if (getFocusTarget() === m) {
-        stopTracking();
-      } else {
-        startTracking(m, true);
-      }
+      // 修 #2: 再次点击同一目标不再取消，改为重新飞过去
+      startTracking(m, true);
     };
     legendList.appendChild(item);
   });
@@ -143,13 +140,10 @@ export function initSceneClick(renderer, camera, getClickable) {
     const hits = raycaster.intersectObjects(getClickable(), false);
     if (hits.length) {
       const m = hits[0].object;
-      if (getFocusTarget() === m) {
-        stopTracking();
-      } else {
-        startTracking(m, true);
-      }
+      // 修 #2: 再次点击同一目标不再取消，改为重新飞过去
+      startTracking(m, true);
     }
-    // 修复：空白处不取消追踪
+    // 修：空白处不取消追踪
   });
 
   renderer.domElement.addEventListener('mousemove', (e)=>{

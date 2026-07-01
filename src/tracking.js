@@ -77,8 +77,16 @@ function onWheel(e) {
   // 滚轮缩放：deltaY 正数 = 远离，负数 = 拉近
   const ZOOM_SPEED = 0.0015;
   _spherical.radius *= 1 + e.deltaY * ZOOM_SPEED;
-  // 限制范围：0.3（贴脸）~ 8000（远观）
-  _spherical.radius = Math.max(0.3, Math.min(8000, _spherical.radius));
+
+  // 修 #3: 缩放范围基于目标行星半径
+  //  - 最小距离 = 目标半径 × 1.2（贴脸看但不能进入行星）
+  //  - 最大距离 = 目标半径 × 50（远观）
+  const targetR = focusTarget.userData.isSun
+    ? getSunDisplayRadius()
+    : getPlanetDisplayRadius(focusTarget.userData.data);
+  const minR = Math.max(targetR * 1.2, 0.3);
+  const maxR = targetR * 50;
+  _spherical.radius = Math.max(minR, Math.min(maxR, _spherical.radius));
 }
 
 function onContextMenu(e) {
@@ -102,12 +110,11 @@ function bindEvents() {
 export function getFocusTarget() { return focusTarget; }
 export function getCamAnim() { return camAnim; }
 
-/** 设置焦点（点击星球/图例） */
+/** 设置焦点（点击星球/图例）
+ * 修 #2: 再次点击同一目标不再取消（避免误操作），改为重新飞过去
+ * 退出焦点只能通过 ESC 或徽章上的"停止"按钮 */
 export function startTracking(mesh, withFocus = true) {
-  if (focusTarget === mesh) {
-    stopTracking();
-    return;
-  }
+  // 再次点同一目标 → 重新飞过去（不取消）
   focusTarget = mesh;
   bindEvents();
   updateTrackingBadge();
@@ -137,8 +144,8 @@ function focusOn(mesh) {
     ? getSunDisplayRadius()
     : getPlanetDisplayRadius(mesh.userData.data);
 
-  // 相机距离 = 行星半径 × 10-20 倍（让用户能看清全行星）
-  const offset = Math.max(displayR * 15, 8);
+  // 相机距离 = 行星半径 × 4-6 倍（让用户能看清全行星，但保持合适的观察距离）
+  const offset = Math.max(displayR * 4, 5);
   const target = wp.clone().add(new THREE.Vector3(offset, offset * 0.4, offset * 0.7));
   animateCamera(target, wp, offset);
 }

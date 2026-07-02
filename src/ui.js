@@ -6,7 +6,7 @@ import { sunGlowSprites } from './planets.js';
 import { startTracking, stopTracking } from './tracking.js';
 import { regenerateStars } from './scene.js';
 import { setGlowEnabled } from './lighting.js';
-import { t, getLang } from './i18n.js';
+import { bi, biParts, applyI18n } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 
@@ -21,7 +21,7 @@ function sliderToSpeed(v) {
   return Math.pow(10, (v - 50) / 25);
 }
 function formatSpeed(s) {
-  if (s === 0) return t('speed_paused');
+  if (s === 0) return bi('speed_paused');
   if (s < 0.1) return s.toFixed(2) + '×';
   if (s < 1) return s.toFixed(1) + '×';
   if (s < 10) return s.toFixed(1) + '×';
@@ -150,34 +150,23 @@ export function initCollapse() {
 
 
 export function initInfoPanel() {
-  // v20260702c: 缓存当前展示的详情, 切语言时重画
-  let _currentDetail = null;
-
   window.addEventListener('show-info', (e) => {
     const d = e.detail;
-    _currentDetail = d;
-    // v20260702c: 中英模式决定行星名格式
-    // - 中文: 地球 (Earth)
-    // - 英文: Earth (地球)  ← 英文模式英文在前
-    if (d.en) {
-      $('info-name').textContent = getLang() === 'en' ? `${d.en} (${d.name})` : `${d.name} (${d.en})`;
-    } else {
-      $('info-name').textContent = d.name;
-    }
-    $('info-type').textContent = d.type || (d.isSun ? t('info_type_sun') : t('info_type_body'));
+    // v20260702d: 双语并列 — 行星名格式 "中文 (English)"
+    $('info-name').textContent = d.en ? `${d.name} (${d.en})` : d.name;
+    $('info-type').textContent = d.type || (d.isSun ? bi('info_type_sun') : bi('info_type_body'));
     if (d.facts){
       const grid = $('info-data'); grid.innerHTML='';
-      // v20260702c: 字段标签走 i18n 字典
       const labels = {
-        diameter:   t('info_diameter'),
-        mass:       t('info_mass'),
-        day:        t('info_day'),
-        year:       t('info_year'),
-        temp:       t('info_temp'),
-        moons:      t('info_moons'),
-        gravity:    t('info_gravity'),
-        age:        t('info_age'),
-        luminosity: t('info_luminosity'),
+        diameter:   bi('info_diameter'),
+        mass:       bi('info_mass'),
+        day:        bi('info_day'),
+        year:       bi('info_year'),
+        temp:       bi('info_temp'),
+        moons:      bi('info_moons'),
+        gravity:    bi('info_gravity'),
+        age:        bi('info_age'),
+        luminosity: bi('info_luminosity'),
       };
       Object.entries(d.facts).forEach(([k,v])=>{
         grid.innerHTML += `<div class="k">${labels[k]||k}</div><div class="v">${v}</div>`;
@@ -186,30 +175,7 @@ export function initInfoPanel() {
     $('info-fact').innerHTML = d.fact || '';
     $('info-panel').classList.add('show');
   });
-  $('info-close').addEventListener('click', ()=> {
-    $('info-panel').classList.remove('show');
-    _currentDetail = null;
-  });
-
-  // v20260702c: 切语言时,如果抽屉打开, 用当前 detail 重画标签
-  window.addEventListener('lang-changed', () => {
-    if (!_currentDetail) return;
-    const d = _currentDetail;
-    $('info-type').textContent = d.type || (d.isSun ? t('info_type_sun') : t('info_type_body'));
-    if (d.facts) {
-      const grid = $('info-data'); grid.innerHTML='';
-      const labels = {
-        diameter: t('info_diameter'), mass: t('info_mass'),
-        day: t('info_day'), year: t('info_year'),
-        temp: t('info_temp'), moons: t('info_moons'),
-        gravity: t('info_gravity'), age: t('info_age'), luminosity: t('info_luminosity'),
-      };
-      Object.entries(d.facts).forEach(([k,v])=>{
-        grid.innerHTML += `<div class="k">${labels[k]||k}</div><div class="v">${v}</div>`;
-      });
-    }
-    $('info-fact').innerHTML = d.fact || '';
-  });
+  $('info-close').addEventListener('click', ()=> $('info-panel').classList.remove('show'));
 }
 
 /* 图例点击 = 切换追踪 */

@@ -126,16 +126,18 @@
   }
   #dock .panel { pointer-events: auto; position: relative; }
 
-  /* Dock 子项高度对齐展开时 = body 自然高度 */
-  #dock #panel-controls { min-width: 280px; }
-  #dock #panel-legend   { min-width: 200px; max-width: 220px; }
-  #dock #panel-hint     { min-width: 240px; }
+  /* v20260702d: 三个面板统一 280px, 展开/折叠宽度锁死不变
+   * — 之前 hint/legend 用 240/220, 展开后视觉不对称, 看起来"挤压"
+   * — 现在 3 个都是 280, 内容少的 hint 多出 padding, 内容多的 legend 撑到 280 */
+  #dock #panel-controls,
+  #dock #panel-legend,
+  #dock #panel-hint {
+    width: 280px;
+    min-width: 280px;
+  }
 
-  /* v20260702c: 折叠时也保留展开时的宽度 — 整个 dock 不再"抖动"
-   * — 只隐藏 body,header 仍占顶部一行,整体宽度 = 展开时的固定宽度
-   * — 文字多的 panel (hint) 在胶囊状态下会出现 padding 拉伸 → 居中对齐 */
+  /* v20260702c: 折叠时也保留展开时的宽度 — 整个 dock 不再"抖动" */
   #dock .panel.collapsed .panel-body {
-    /* 不 display:none, 改用 height:0 + padding:0 保持容器宽度 */
     height: 0 !important;
     padding: 0 !important;
     overflow: hidden;
@@ -148,57 +150,7 @@
     width: 6px; height: 6px;
   }
 
-  /* ==========================================================
-   * 语言切换按钮 — 右上角 (z-index 高于 #info-panel)
-   * ========================================================== */
-  #lang-switch {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    display: flex;
-    gap: 0;
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: var(--radius);
-    backdrop-filter: blur(18px) saturate(140%);
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
-    box-shadow: var(--shadow-glow);
-    z-index: 120;        /* 比 info-panel (110) 高, 始终在抽屉之上 */
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    letter-spacing: 1.5px;
-    overflow: hidden;
-    transition:
-      transform var(--t-norm) var(--ease),
-      opacity var(--t-fast);
-  }
-  #lang-switch button {
-    background: transparent;
-    border: none;
-    color: var(--text-dim);
-    padding: 8px 12px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: inherit;
-    letter-spacing: inherit;
-    transition: color var(--t-fast), background var(--t-fast);
-    border-right: 1px solid var(--panel-border);
-  }
-  #lang-switch button:last-child { border-right: none; }
-  #lang-switch button:hover { color: var(--text); }
-  #lang-switch button.active {
-    color: var(--accent);
-    background: rgba(126, 182, 255, 0.10);
-  }
-
-  /* 移动端避免跟 info-panel 重叠 — 抽屉满屏时,按钮挪到顶部 */
-  @media (max-width: 768px) {
-    #lang-switch {
-      top: 14px;
-      right: 14px;
-      z-index: 130;     /* 高于移动端底部抽屉 */
-    }
-  }
+  /* v20260702d: 删除 lang-switch — 双语并列方案不需要切换按钮 */
 
   /* ==========================================================
    * Info Panel — 右侧抽屉（点击星球时弹出，不在同一 dock）
@@ -560,14 +512,6 @@
 <div id="app"></div>
 
 <!-- ============================================================
-     语言切换 — 右上角, 默认中文
-     ============================================================ -->
-<div id="lang-switch" role="group" aria-label="Language">
-  <button data-lang="zh" class="active" aria-label="中文">中</button>
-  <button data-lang="en" aria-label="English">EN</button>
-</div>
-
-<!-- ============================================================
      底部 Dock — 多 panel 横向排列，统一从底部中心对齐
      ============================================================ -->
 <div id="dock">
@@ -575,37 +519,37 @@
   <!-- 操作提示（折叠：只剩 header） -->
   <section class="panel" id="panel-hint" data-collapse>
     <div class="panel-header" data-collapse-btn>
-      <span class="title" data-i18n="title_controls">Controls</span>
+      <span class="title" data-i18n="title_controls">操作提示 · Controls</span>
       <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
     </div>
     <div class="panel-body" data-collapse-body>
       <div id="hint">
-        <span class="k">DRAG</span> <span class="v" data-i18n="hint_drag">左键旋转视角</span><br>
-        <span class="k">PAN</span> <span class="v" data-i18n="hint_pan">右键平移</span><br>
-        <span class="k">ZOOM</span> <span class="v" data-i18n="hint_zoom">滚轮缩放</span><br>
-        <span class="k">CLICK</span> <span class="v" data-i18n="hint_click">点击星球 / 图例</span><br>
-        <span class="k">ESC</span> <span class="v" data-i18n="hint_esc">退出追踪</span>
+        <span class="k" data-i18n="hint_drag_k">DRAG</span> <span class="v" data-i18n="hint_drag_v">左键旋转视角 · LEFT-DRAG TO ROTATE</span><br>
+        <span class="k" data-i18n="hint_pan_k">PAN</span> <span class="v" data-i18n="hint_pan_v">右键平移 · RIGHT-DRAG TO PAN</span><br>
+        <span class="k" data-i18n="hint_zoom_k">ZOOM</span> <span class="v" data-i18n="hint_zoom_v">滚轮缩放 · SCROLL TO ZOOM</span><br>
+        <span class="k" data-i18n="hint_click_k">CLICK</span> <span class="v" data-i18n="hint_click_v">点击星球 / 图例 · CLICK PLANET OR LEGEND</span><br>
+        <span class="k" data-i18n="hint_esc_k">ESC</span> <span class="v" data-i18n="hint_esc_v">退出追踪 · EXIT TRACKING</span>
       </div>
     </div>
   </section>
 
-  <!-- 控制台 -->
+  <!-- 仪表盘 -->
   <section class="panel" id="panel-controls" data-collapse>
     <div class="panel-header" data-collapse-btn>
-      <span class="title" data-i18n="title_dashboard">Dashboard</span>
+      <span class="title" data-i18n="title_dashboard">仪表盘 · Dashboard</span>
       <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
     </div>
     <div class="panel-body">
-      <!-- v20260702c: 重组 Dashboard — 3 个 slider 聚在最上面,中间 divider 分组 -->
+      <!-- v20260702c: 3 个 slider 聚在最上面,中间 divider 分组 -->
 
       <!-- 时间流速 -->
       <div class="ctrl-row">
         <div class="ctrl-head">
-          <span class="ctrl-label" data-i18n="time">TIME · 时间流速</span>
+          <span class="ctrl-label" data-i18n="time">时间流速 · TIME</span>
           <span class="ctrl-value" id="speed-label">1.0×</span>
         </div>
         <input type="range" id="speed-slider" min="0" max="100" value="50" step="0.5">
@@ -614,7 +558,7 @@
       <!-- 太阳亮度 -->
       <div class="ctrl-row">
         <div class="ctrl-head">
-          <span class="ctrl-label" data-i18n="luminance">LUMINANCE · 太阳亮度</span>
+          <span class="ctrl-label" data-i18n="luminance">太阳亮度 · LUMINANCE</span>
           <span class="ctrl-value" id="brightness-label">1.5</span>
         </div>
         <input type="range" id="brightness-slider" min="0.5" max="8" value="1.5" step="0.1">
@@ -623,7 +567,7 @@
       <!-- 星光密度 -->
       <div class="ctrl-row">
         <div class="ctrl-head">
-          <span class="ctrl-label" data-i18n="star_density">STAR DENSITY · 星光密度</span>
+          <span class="ctrl-label" data-i18n="star_density">星光密度 · STAR DENSITY</span>
           <span class="ctrl-value" id="stars-density-label">100%</span>
         </div>
         <input type="range" id="stars-density-slider" min="0" max="100" value="100" step="5">
@@ -633,45 +577,45 @@
 
       <!-- toggle 开关 -->
       <label class="toggle-row">
-        <span class="toggle-label" data-i18n="show_orbits">显示轨道</span>
+        <span class="toggle-label" data-i18n="show_orbits">显示轨道 · SHOW ORBITS</span>
         <input type="checkbox" id="toggle-orbits" checked>
         <span class="switch"></span>
       </label>
       <label class="toggle-row">
-        <span class="toggle-label" data-i18n="show_labels">显示星标</span>
+        <span class="toggle-label" data-i18n="show_labels">显示星标 · SHOW LABELS</span>
         <input type="checkbox" id="toggle-labels" checked>
         <span class="switch"></span>
       </label>
       <label class="toggle-row">
-        <span class="toggle-label" data-i18n="star_bg">星空背景</span>
+        <span class="toggle-label" data-i18n="star_bg">星空背景 · STARFIELD</span>
         <input type="checkbox" id="toggle-stars" checked>
         <span class="switch"></span>
       </label>
       <label class="toggle-row">
-        <span class="toggle-label" data-i18n="earth_clouds">地球云层</span>
+        <span class="toggle-label" data-i18n="earth_clouds">地球云层 · EARTH CLOUDS</span>
         <input type="checkbox" id="toggle-clouds" checked>
         <span class="switch"></span>
       </label>
       <label class="toggle-row">
-        <span class="toggle-label" data-i18n="sun_glow">太阳辉光</span>
+        <span class="toggle-label" data-i18n="sun_glow">太阳辉光 · SUN GLOW</span>
         <input type="checkbox" id="toggle-bloom" checked>
         <span class="switch"></span>
       </label>
 
-      <div class="footnote" data-i18n="footnote">AU 真实 · 体积艺术夸张</div>
+      <div class="footnote" data-i18n="footnote">AU 真实 · 体积艺术夸张 · AU TRUE-TO-SCALE · VOLUME ARTISTIC</div>
     </div>
   </section>
 
   <!-- 行星图例 -->
   <section class="panel" id="panel-legend" data-collapse>
     <div class="panel-header" data-collapse-btn>
-      <span class="title" data-i18n="title_planets">Planets</span>
+      <span class="title" data-i18n="title_planets">行星图例 · Planets</span>
       <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
     </div>
     <div class="panel-body">
-      <div class="panel-hint-text" data-i18n="legend_hint">点击追踪 · 再次点击取消</div>
+      <div class="panel-hint-text" data-i18n="legend_hint">点击追踪 · 再次点击取消 · CLICK TO TRACK · CLICK AGAIN TO RELEASE</div>
       <div id="legend-list"></div>
     </div>
   </section>
@@ -680,9 +624,9 @@
 <!-- 追踪浮条（左下角） -->
 <div id="tracking-badge">
   <span class="pulse"></span>
-  <span data-i18n="tracking">TRACKING</span>
+  <span data-i18n="tracking">追踪中 · TRACKING</span>
   <span class="target-name" id="tracking-name">—</span>
-  <button class="stop-btn" id="tracking-stop-btn" data-i18n="stop">STOP</button>
+  <button class="stop-btn" id="tracking-stop-btn" data-i18n="stop">停止 · STOP</button>
   <span class="esc-hint">ESC</span>
 </div>
 
@@ -724,6 +668,6 @@
   });
 </script>
 
-<script type="module" src="./src/main.js?v=20260702b"></script>
+<script type="module" src="./src/main.js?v=20260702d"></script>
 </body>
 </html>

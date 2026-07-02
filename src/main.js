@@ -12,7 +12,7 @@ import {
   initInfoPanel, initLegend, initTrackingStopButton, initSceneClick,
   getSpeedFactor, initCollapse
 } from './ui.js';
-import { initI18n, t, applyI18n } from './i18n.js';
+import { initI18n } from './i18n.js';
 import { PLANETS, SUN_R, MOON, DIST_SCALE } from './constants.js';
 
 // 进入页面立刻显示 loader overlay（在 JS bundle 完成前）

@@ -20,7 +20,7 @@ A **Three.js 0.160** based 3D solar system explorer. Pure-frontend single-page a
 - **Camera-following starfield** — stars visible in all directions even at Neptune
 - **Orbit tracking** — click planet or legend → camera flies to it + custom spherical camera control
 - **Time speed** — pause / 1× / 100× multi-stage
-- **Cloud layer** — separate sphere with noise displacement (no plastic-贴图 look)
+- **Cloud layer** — separate sphere with noise displacement (no plastic-texture look)
 
 ## 🚀 Run Locally
 
@@ -35,20 +35,53 @@ python -m http.server 8765
 
 ## ☁️ Deploy to Cloudflare Pages
 
-**Method 1 — Direct Upload (easiest)**
+Deployed via **Cloudflare Pages + GitHub integration**: every `git push` auto-deploys in ~30s.
 
-1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com/) → Pages
-2. Click "Create a project" → "Direct Upload"
-3. Drag the entire project directory in (must include `index.html` and `src/`)
-4. Cloudflare auto-assigns a `*.pages.dev` subdomain
-5. Done — no configuration needed
+**Live**: [https://solarsystem.upstream.eu.cc](https://solarsystem.upstream.eu.cc) (custom domain) + `https://solar-system-etk.pages.dev` (Cloudflare default)
 
-**Method 2 — GitHub Integration (auto-deploy)**
+### One-time setup
 
-1. Push code to GitHub
-2. Cloudflare Pages → "Connect to Git" → select your repo
-3. Build settings: leave empty (**no build step**), Output dir = `/`
-4. Every push auto-deploys
+1. **Create the Pages project**
+   - Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** (NOT Workers)
+   - **Connect to Git** → GitHub → authorize → pick `Upstream17/solar-system`
+
+2. **Build settings** (critical — must be exact):
+   | Option | Value |
+   |---|---|
+   | Project name | `solar-system` (Cloudflare appends suffix like `-etk` if taken) |
+   | Production branch | `main` |
+   | Framework preset | **None** |
+   | Build command | **leave empty** (no build step) |
+   | Build output directory | `/` |
+
+3. **Save and Deploy** → wait 30-60s → "Your site is live" → done
+
+### Custom domain (optional)
+
+If you own a domain (e.g. `upstream.eu.cc`), bind a subdomain like `solarsystem.upstream.eu.cc`:
+
+1. Pages project → **Custom domains** → **Set up a custom domain** → enter `solarsystem.upstream.eu.cc`
+2. Cloudflare auto-configures the CNAME (if the domain is already on Cloudflare)
+3. **If the domain is not on Cloudflare**, add at your DNS provider:
+   ```
+   Type: CNAME
+   Name: solarsystem
+   Target: solar-system-etk.pages.dev
+   Proxy: DNS only (toggle cloud icon OFF)
+   ```
+4. SSL certificate auto-issues in 5-15 minutes
+
+> ⚠️ **Apex domains like `upstream.eu.cc` cannot be bound directly** — must use a subdomain prefix.
+
+### Day-to-day deploy
+
+```bash
+git add -A
+git commit -m "your change"
+git push origin main
+```
+
+Cloudflare detects the push → builds → deploys → live in 30s. **No wrangler commands, no API tokens needed.**
 
 ## 🎮 Controls
 

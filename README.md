@@ -37,22 +37,53 @@ python -m http.server 8765
 
 ## ☁️ 部署到 Cloudflare Pages
 
-**方法 1 — 拖拽上传（最简单）**
+本项目采用 **Cloudflare Pages + GitHub 集成**：每次 `git push` 自动触发部署，30 秒生效。
 
-1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/) → Pages
-2. 点击 "Create a project" → "Direct Upload"
-3. 把整个项目目录拖进去（**包含 `index.html` 和 `src/`**）
-4. Cloudflare 自动分配 `*.pages.dev` 域名
-5. 完成，无需任何配置
+**线上地址**：[https://solarsystem.upstream.eu.cc](https://solarsystem.upstream.eu.cc)（自定义域名）+ `https://solar-system-etk.pages.dev`（Cloudflare 默认域名）
 
-**方法 2 — GitHub 集成（自动部署）**
+### 一次性配置（首次部署）
 
-1. 把代码推到 GitHub（参考下方 git 步骤）
-2. Cloudflare Pages → "Connect to Git" → 选你的 repo
-3. Build settings 留空（**无构建步骤**），Output dir = `/`
-4. 每次 push 自动部署
+1. **创建 Pages 项目**
+   - 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers 和 Pages** → **Create** → **Pages**（不是 Workers）
+   - 选 **Connect to Git** → GitHub → 授权 → 选 `Upstream17/solar-system`
 
-**关于 Worker 部署**：你提到 "运行在 Cloudflare 的 worker 中" — 但 Pages 比 Workers 更适合静态站点。Workers 需要 JS 入口 + 路由逻辑来 serve 静态文件。如果你确实要用 Workers，可以加一个 `src/index.js` 用 [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/) 模式。
+2. **Build settings**（关键 — 必须全对）
+   | 选项 | 值 |
+   |---|---|
+   | Project name | `solar-system`（若已被占会加后缀，如 `-etk`） |
+   | Production branch | `main` |
+   | Framework preset | **None** |
+   | Build command | **留空**（无构建步骤） |
+   | Build output directory | `/` |
+
+3. **Save and Deploy** → 等 30-60 秒 → 看到 "Your site is live" → 完成
+
+### 自定义域名（可选）
+
+如果你有自己的域名（如 `upstream.eu.cc`），绑定子域名 `solarsystem.upstream.eu.cc`：
+
+1. Pages 项目 → **Custom domains** → **Set up a custom domain** → 输入 `solarsystem.upstream.eu.cc`
+2. Cloudflare 自动配 CNAME（如域名已在 Cloudflare）
+3. **如果域名不在 Cloudflare**，需要去 DNS 提供商加：
+   ```
+   Type: CNAME
+   Name: solarsystem
+   Target: solar-system-etk.pages.dev
+   Proxy: DNS only（关掉云朵图标）
+   ```
+4. SSL 证书自动签发，等 5-15 分钟
+
+> ⚠️ **根域名 `upstream.eu.cc` 不能直接绑 Pages**，必须用子域名前缀。
+
+### 日常部署
+
+```bash
+git add -A
+git commit -m "your change"
+git push origin main
+```
+
+Cloudflare 自动检测 push → 构建 → 部署 → 30 秒后生效。**无需任何 wrangler 命令、无需 token**。
 
 ## 📁 文件结构
 

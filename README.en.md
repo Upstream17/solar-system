@@ -2,10 +2,10 @@
 
 <a href="README.md"><img src="https://img.shields.io/badge/Lang-中文-red?style=for-the-badge" alt="中文"></a>
 <a href="README.en.md"><img src="https://img.shields.io/badge/Lang-English-blue?style=for-the-badge" alt="English"></a>
+<a href="https://solarsystem.upstream.eu.cc"><img src="https://img.shields.io/badge/🌐_Live-solarsystem.upstream.eu.cc-FF6B35?style=for-the-badge" alt="Live demo"></a>
+<a href="https://github.com/Upstream17/solar-system"><img src="https://img.shields.io/badge/☁️_Hosted_on-Cloudflare_Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Pages"></a>
 
 A **Three.js 0.160** based 3D solar system explorer. Pure-frontend single-page app, no build step, deploys to Cloudflare Pages out of the box.
-
-🌐 **Live demo**: [solar-system.pages.dev](https://solar-system.pages.dev/)
 
 ## ✨ Features
 

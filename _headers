@@ -1,0 +1,5 @@
+# HTML 永远不缓存, 用户每次刷新拿最新版本 (避免 importmap 缓存导致 stale module)
+/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# JS/CSS 走 immutable 1 年 (Cloudflare 默认, 这里显式声明)

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { scaleScene } from './scale.js';
 import { sunGlowSprites } from './planets.js';
-import { startTracking, stopTracking } from './tracking.js';
+import { startTracking, stopTracking } from './tracking.v2.js';
 import { regenerateStars } from './scene.js';
 import { setGlowEnabled } from './lighting.js';
 import { bi, infoT } from './i18n.js';

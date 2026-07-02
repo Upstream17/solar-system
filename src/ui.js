@@ -6,6 +6,7 @@ import { sunGlowSprites } from './planets.js';
 import { startTracking, stopTracking } from './tracking.js';
 import { regenerateStars } from './scene.js';
 import { setGlowEnabled } from './lighting.js';
+import { t, getLang } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 
@@ -20,7 +21,7 @@ function sliderToSpeed(v) {
   return Math.pow(10, (v - 50) / 25);
 }
 function formatSpeed(s) {
-  if (s === 0) return '⏸ 暂停';
+  if (s === 0) return t('speed_paused');
   if (s < 0.1) return s.toFixed(2) + '×';
   if (s < 1) return s.toFixed(1) + '×';
   if (s < 10) return s.toFixed(1) + '×';
@@ -132,7 +133,8 @@ export function initCollapse() {
     const btn = panel.querySelector('[data-collapse-btn]');
     const key = `collapse_${id}`;
     let open = localStorage.getItem(key);
-    open = open === null ? true : open === '1';
+    // v20260702c: 首次访问默认折叠（用户偏好），已有用户保留历史偏好
+    open = open === null ? false : open === '1';
     apply();
     btn?.addEventListener('click', () => {
       open = !open;
@@ -148,14 +150,35 @@ export function initCollapse() {
 
 
 export function initInfoPanel() {
+  // v20260702c: 缓存当前展示的详情, 切语言时重画
+  let _currentDetail = null;
+
   window.addEventListener('show-info', (e) => {
     const d = e.detail;
-    $('info-name').textContent = d.name + (d.en?` (${d.en})`:'');
-    $('info-type').textContent = d.type || (d.isSun?'恒星 G2V 型':'太阳系天体');
+    _currentDetail = d;
+    // v20260702c: 中英模式决定行星名格式
+    // - 中文: 地球 (Earth)
+    // - 英文: Earth (地球)  ← 英文模式英文在前
+    if (d.en) {
+      $('info-name').textContent = getLang() === 'en' ? `${d.en} (${d.name})` : `${d.name} (${d.en})`;
+    } else {
+      $('info-name').textContent = d.name;
+    }
+    $('info-type').textContent = d.type || (d.isSun ? t('info_type_sun') : t('info_type_body'));
     if (d.facts){
       const grid = $('info-data'); grid.innerHTML='';
-      const labels = { diameter:'直径', mass:'质量', day:'自转周期', year:'公转周期',
-                       temp:'温度', moons:'卫星数', gravity:'表面重力', age:'年龄', luminosity:'光度' };
+      // v20260702c: 字段标签走 i18n 字典
+      const labels = {
+        diameter:   t('info_diameter'),
+        mass:       t('info_mass'),
+        day:        t('info_day'),
+        year:       t('info_year'),
+        temp:       t('info_temp'),
+        moons:      t('info_moons'),
+        gravity:    t('info_gravity'),
+        age:        t('info_age'),
+        luminosity: t('info_luminosity'),
+      };
       Object.entries(d.facts).forEach(([k,v])=>{
         grid.innerHTML += `<div class="k">${labels[k]||k}</div><div class="v">${v}</div>`;
       });
@@ -163,7 +186,30 @@ export function initInfoPanel() {
     $('info-fact').innerHTML = d.fact || '';
     $('info-panel').classList.add('show');
   });
-  $('info-close').addEventListener('click', ()=> $('info-panel').classList.remove('show'));
+  $('info-close').addEventListener('click', ()=> {
+    $('info-panel').classList.remove('show');
+    _currentDetail = null;
+  });
+
+  // v20260702c: 切语言时,如果抽屉打开, 用当前 detail 重画标签
+  window.addEventListener('lang-changed', () => {
+    if (!_currentDetail) return;
+    const d = _currentDetail;
+    $('info-type').textContent = d.type || (d.isSun ? t('info_type_sun') : t('info_type_body'));
+    if (d.facts) {
+      const grid = $('info-data'); grid.innerHTML='';
+      const labels = {
+        diameter: t('info_diameter'), mass: t('info_mass'),
+        day: t('info_day'), year: t('info_year'),
+        temp: t('info_temp'), moons: t('info_moons'),
+        gravity: t('info_gravity'), age: t('info_age'), luminosity: t('info_luminosity'),
+      };
+      Object.entries(d.facts).forEach(([k,v])=>{
+        grid.innerHTML += `<div class="k">${labels[k]||k}</div><div class="v">${v}</div>`;
+      });
+    }
+    $('info-fact').innerHTML = d.fact || '';
+  });
 }
 
 /* 图例点击 = 切换追踪 */

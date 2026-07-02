@@ -12,6 +12,7 @@ import {
   initInfoPanel, initLegend, initTrackingStopButton, initSceneClick,
   getSpeedFactor, initCollapse
 } from './ui.js';
+import { initI18n, t, applyI18n } from './i18n.js';
 import { PLANETS, SUN_R, MOON, DIST_SCALE } from './constants.js';
 
 // 进入页面立刻显示 loader overlay（在 JS bundle 完成前）
@@ -62,16 +63,19 @@ async function init() {
     // 7. 缩放初始化
     scaleScene(scene, camera, controls);
 
-    // 8. UI
+    // 8. i18n 必须在所有 UI 初始化之前 — 字典 + 按钮 + 首帧应用
+    initI18n();
+
+    // 9. UI
     initSliders(sunLight);
     initToggles(scene, camera, controls);
     bindStarsToggle(stars);
     initInfoPanel();
     initTracking(camera, controls, renderer);
     initTrackingStopButton();
-    initCollapse();   // 新增：折叠面板初始化（必须在 UI 元素都加载完后）
+    initCollapse();   // 折叠面板初始化（必须在 UI 元素都加载完后）
 
-    // 9. 点击交互
+    // 10. 点击交互
     const allClickable = [];
     function rebuildClickableList() {
       allClickable.length = 0;
@@ -82,10 +86,10 @@ async function init() {
     rebuildClickableList();
     initSceneClick(renderer, camera, () => allClickable);
 
-    // 10. 图例
+    // 11. 图例
     initLegend();
 
-    // 11. resize
+    // 12. resize
     addEventListener('resize', ()=>{
       camera.aspect = innerWidth/innerHeight;
       camera.updateProjectionMatrix();
@@ -93,7 +97,7 @@ async function init() {
       composer.setSize(innerWidth, innerHeight);  // composer 也要同步
     });
 
-    // 12. 主循环
+    // 13. 主循环
     const clock = new THREE.Clock();
     function tick() {
       // deltaReal: 真实经过时间（相机动画、星空旋转用这个，跟 speedFactor 无关）

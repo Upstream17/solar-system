@@ -2,6 +2,7 @@
 
 <a href="README.en.md"><img src="https://img.shields.io/badge/Lang-English-blue?style=for-the-badge" alt="English"></a>
 <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/Lang-中文-red?style=for-the-badge" alt="中文"></a>
+<a href="https://solarsystem.upstream.eu.cc"><img src="https://img.shields.io/badge/🌐_在线访问-solarsystem.upstream.eu.cc-FF6B35?style=for-the-badge" alt="在线访问"></a>
 
 基于 **Three.js 0.160** 的太阳系 3D 探索器，纯前端单页应用，无构建步骤，部署到 Cloudflare Pages 即可访问。
 

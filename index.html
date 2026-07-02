@@ -160,7 +160,8 @@
     top: 14px;
     right: 14px;
     width: 320px;
-    max-height: calc(100vh - 28px);
+    /* v20260702g: max-height 给底部 dock 让空间, 避免遮挡 panel-legend (BODIES) */
+    max-height: calc(100vh - 28px - 340px);
     background: var(--panel);
     border: 1px solid var(--panel-border);
     border-radius: var(--radius);

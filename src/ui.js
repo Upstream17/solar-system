@@ -156,14 +156,9 @@ export function initInfoPanel() {
   let _infoLang = 'zh';
 
   function render(d) {
-    // 行星名: 单语模式 — 中文模式显示 "太阳 (Sun)" / 英文模式显示 "Sun (太阳)"
-    if (d.en) {
-      $('info-name').textContent = _infoLang === 'en'
-        ? `${d.en} (${d.name})`
-        : `${d.name} (${d.en})`;
-    } else {
-      $('info-name').textContent = d.name;
-    }
+    // v20260702g: 行星名单语模式 — 中文模式显示 "水星", 英文模式显示 "Mercury"
+    // — 之前 "Mercury（水星）" 双语并列在纯单语模式里多此一举
+    $('info-name').textContent = _infoLang === 'en' ? (d.en || d.name) : d.name;
     // v20260702f: type 和 fact 走 data 自带的双语字段 (d.typeZh/d.typeEn/d.factZh/d.factEn)
     // — 之前走字典 + TYPE_KEY_MAP, 太阳/木星等中英硬编码字段切不动
     // — 现在每颗星球的描述都自带双语, 切 EN 时 type 和 fact 都同步翻
@@ -182,7 +177,11 @@ export function initInfoPanel() {
         age:        infoT('info_age',        _infoLang),
         luminosity: infoT('info_luminosity', _infoLang),
       };
-      Object.entries(d.facts).forEach(([k,v])=>{
+      // v20260702g: facts 按 lang 选 (factsEn / factsZh), 之前 facts 字典硬编码中文单位
+      // — 比如 day:'58.6 地球日', EN 模式也显示中文单位
+      const factsKey = _infoLang === 'en' ? 'factsEn' : 'factsZh';
+      const factsData = d[factsKey] || d.facts || {};
+      Object.entries(factsData).forEach(([k,v])=>{
         grid.innerHTML += `<div class="k">${labels[k]||k}</div><div class="v">${v}</div>`;
       });
     }

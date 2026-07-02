@@ -73,8 +73,10 @@ export async function makeSun(scene) {
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.userData = { isSun:true, name:'太阳', en:'Sun', size:SUN_R, typeZh:SUN_FACTS.typeZh, typeEn:SUN_FACTS.typeEn,
-    facts:{ diameter:'1,392,700 km', mass:'1.99×10³⁰ kg', age:'46 亿年',
-            temp:'表面 5,500 °C · 核心 1,500 万 °C', gravity:'274 m/s²', luminosity:'3.83×10²⁶ W' },
+    factsZh:{ diameter:'1,392,700 km', mass:'1.99×10³⁰ kg', age:'46 亿年',
+              temp:'表面 5,500 °C · 核心 1,500 万 °C', gravity:'274 m/s²', luminosity:'3.83×10²⁶ W' },
+    factsEn:{ diameter:'1,392,700 km', mass:'1.99×10³⁰ kg', age:'4.6 billion years',
+              temp:'Surface 5,500 °C · Core 15 million °C', gravity:'274 m/s²', luminosity:'3.83×10²⁶ W' },
     factZh:SUN_FACTS.factZh,
     factEn:SUN_FACTS.factEn };
   scene.add(mesh);

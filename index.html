@@ -177,6 +177,42 @@
   @keyframes slideInR { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   #info-panel .panel-header { border-bottom: 1px solid var(--panel-border); }
   #info-panel .panel-body { padding: 16px; max-height: calc(100vh - 80px); overflow-y: auto; }
+  /* v20260702e: info-panel header 三段式 — 左侧 title / 中部 lang toggle / 右侧 close */
+  #info-panel .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #info-panel .panel-header .title { flex: 1; min-width: 0; }
+
+  /* info-panel 内嵌 lang toggle — 视觉比之前强 (边框 + 背景) */
+  #info-panel .lang-toggle {
+    display: flex;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  #info-panel .lang-toggle button {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 4px 8px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 1px;
+    transition: all var(--t-fast);
+    border-right: 1px solid var(--panel-border);
+  }
+  #info-panel .lang-toggle button:last-child { border-right: none; }
+  #info-panel .lang-toggle button:hover { color: var(--text); }
+  #info-panel .lang-toggle button.active {
+    color: #02050a;
+    background: var(--accent);
+    font-weight: 600;
+  }
+
   #info-panel h2 {
     margin: 0 0 2px 0;
     font-family: var(--font-mono);
@@ -437,6 +473,22 @@
     color: var(--text);
     flex: 1;
   }
+  /* v20260702e: 行星名双语并列 — 中文为主, 英文在右
+   * — 中文用主色, 英文用次要色 + 稍小字号, 一行排开 */
+  #legend-list .name-zh {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 1px;
+    color: var(--text);
+  }
+  #legend-list .name-en {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    margin-left: 8px;
+    text-transform: uppercase;
+  }
   #legend-list .au {
     font-family: var(--font-mono);
     font-size: 10px;
@@ -459,6 +511,17 @@
   }
   #hint .k { color: var(--accent); }
   #hint .v { color: var(--text-mid); }
+  /* v20260702e: hint 拆两行布局 — key 单独一行, value 单独一行
+   * — 之前 inline 强制同行, 中英内容挤得难看 */
+  #hint .k,
+  #hint .v {
+    display: block;
+  }
+  #hint .k { margin-top: 4px; }
+  #hint .v {
+    margin-bottom: 4px;
+    line-height: 1.55;
+  }
 
   /* ==========================================================
    * 移动端 (< 768px)
@@ -526,11 +589,16 @@
     </div>
     <div class="panel-body" data-collapse-body>
       <div id="hint">
-        <span class="k" data-i18n="hint_drag_k">DRAG</span> <span class="v" data-i18n="hint_drag_v">左键旋转视角 · LEFT-DRAG TO ROTATE</span><br>
-        <span class="k" data-i18n="hint_pan_k">PAN</span> <span class="v" data-i18n="hint_pan_v">右键平移 · RIGHT-DRAG TO PAN</span><br>
-        <span class="k" data-i18n="hint_zoom_k">ZOOM</span> <span class="v" data-i18n="hint_zoom_v">滚轮缩放 · SCROLL TO ZOOM</span><br>
-        <span class="k" data-i18n="hint_click_k">CLICK</span> <span class="v" data-i18n="hint_click_v">点击星球 / 图例 · CLICK PLANET OR LEGEND</span><br>
-        <span class="k" data-i18n="hint_esc_k">ESC</span> <span class="v" data-i18n="hint_esc_v">退出追踪 · EXIT TRACKING</span>
+        <span class="k" data-i18n="hint_drag_k">DRAG</span><br>
+        <span class="v" data-i18n="hint_drag_v">左键旋转视角 · LEFT-DRAG TO ROTATE</span><br>
+        <span class="k" data-i18n="hint_pan_k">PAN</span><br>
+        <span class="v" data-i18n="hint_pan_v">右键平移 · RIGHT-DRAG TO PAN</span><br>
+        <span class="k" data-i18n="hint_zoom_k">ZOOM</span><br>
+        <span class="v" data-i18n="hint_zoom_v">滚轮缩放 · SCROLL TO ZOOM</span><br>
+        <span class="k" data-i18n="hint_trace_k">TRACE</span><br>
+        <span class="v" data-i18n="hint_trace_v">点击行星 / 图例追踪 · TAP PLANET OR LEGEND</span><br>
+        <span class="k" data-i18n="hint_esc_k">ESC</span><br>
+        <span class="v" data-i18n="hint_esc_v">退出追踪 · EXIT TRACKING</span>
       </div>
     </div>
   </section>
@@ -632,9 +700,13 @@
 
 <!-- 星球信息面板（右侧抽屉） -->
 <div id="info-panel">
-  <div class="panel-header" style="cursor:default;">
+  <div class="panel-header">
     <span class="title" id="info-type">—</span>
-    <span class="close" id="info-close" style="opacity:0.6;cursor:pointer;font-family:var(--font-mono);font-size:14px;letter-spacing:2px;">×</span>
+    <div class="lang-toggle" role="group" aria-label="Language">
+      <button data-lang="zh" class="active" aria-label="中文">中</button>
+      <button data-lang="en" aria-label="English">EN</button>
+    </div>
+    <span class="close" id="info-close" style="opacity:0.6;cursor:pointer;font-family:var(--font-mono);font-size:14px;letter-spacing:2px;flex-shrink:0;">×</span>
   </div>
   <div class="panel-body">
     <h2 id="info-name">—</h2>
@@ -668,6 +740,6 @@
   });
 </script>
 
-<script type="module" src="./src/main.js?v=20260702d"></script>
+<script type="module" src="./src/main.js?v=20260702e"></script>
 </body>
 </html>

@@ -1,20 +1,22 @@
-/* i18n.js — 双语并列字典 (v20260702d)
+/* i18n.js — 双语并列字典 + info-panel 单语切换 (v20260702e)
  *
- * 设计原则:
- *   - 默认中文为主,英文跟在后面,中间用「·」分隔
- *   - 例: bi('time') → "时间流速 · TIME"
- *   - 不再切换语言,所有用户都看到同一组双语
+ * 两套并存:
+ *   1. 底部 dock / legend / 追踪浮条 / footnote: 全部双语并列
+ *      - 用 bi('key') → "中文 · ENGLISH"
+ *   2. info-panel (右侧抽屉): 单语切换
+ *      - 用 infoT('key', lang) → 单语字符串
+ *      - lang = 'zh' | 'en', 由 info-panel 内嵌按钮控制
  *
- * 为什么不切换:
- *   - 切换按钮的 active 视觉太弱, 用户感觉"点了没反应"
- *   - 切换时部分动态内容(抽屉)会闪烁重画
- *   - 双语并列同时照顾中英读者, 不强迫选边
- *
- * 字典 key 集中维护,避免 typo:
+ * 设计取舍:
+ *   - 底部面板内容是"短标签"型, 双语并列最省事
+ *   - info-panel 内容是"长描述"型 (fact 段落), 单语切换更省空间
+ *   - 两套并存, 因为场景不同
  */
 
 const DICT = {
-  // panel 标题 — 中文为主, 英文跟在后面
+  // ============ 底部 dock / legend / 通用 (双语并列) ============
+
+  // panel 标题
   title_controls:  ['操作提示',  'Controls'],
   title_dashboard: ['仪表盘',    'Dashboard'],
   title_planets:   ['行星图例',  'Planets'],
@@ -31,15 +33,17 @@ const DICT = {
   earth_clouds:   ['地球云层',   'EARTH CLOUDS'],
   sun_glow:       ['太阳辉光',   'SUN GLOW'],
 
-  // hint (controls 面板内的快捷键说明) — 每行只显示一种语言, 上下两行展示
+  // hint (controls 面板内的快捷键说明)
+  // v20260702e: CLICK → TRACE, 因为点星球=追踪, "CLICK" 没说明结果
+  // 改成 TRACE 后用户立刻知道"点了会追踪"
   hint_drag_k:    'DRAG',
   hint_drag_v:    '左键旋转视角 · LEFT-DRAG TO ROTATE',
   hint_pan_k:     'PAN',
   hint_pan_v:     '右键平移 · RIGHT-DRAG TO PAN',
   hint_zoom_k:    'ZOOM',
   hint_zoom_v:    '滚轮缩放 · SCROLL TO ZOOM',
-  hint_click_k:   'CLICK',
-  hint_click_v:   '点击星球 / 图例 · CLICK PLANET OR LEGEND',
+  hint_trace_k:   'TRACE',
+  hint_trace_v:   '点击行星 / 图例追踪 · TAP PLANET OR LEGEND',
   hint_esc_k:     'ESC',
   hint_esc_v:     '退出追踪 · EXIT TRACKING',
 
@@ -48,7 +52,7 @@ const DICT = {
   stop:           '停止 · STOP',
 
   // 图例提示
-  legend_hint:    '点击追踪 · 再次点击取消  ·  CLICK TO TRACK · CLICK AGAIN TO RELEASE',
+  legend_hint:    '点击追踪 · 再次点击取消  ·  TAP TO TRACE · TAP AGAIN TO RELEASE',
 
   // footer
   footnote:       'AU 真实 · 体积艺术夸张  ·  AU TRUE-TO-SCALE · VOLUME ARTISTIC',
@@ -56,38 +60,46 @@ const DICT = {
   // 速度条
   speed_paused:   '⏸ 暂停 · PAUSED',
 
-  // 抽屉类型
-  info_type_sun:  'G2V 型黄矮星 · G2V YELLOW DWARF',
-  info_type_body: '太阳系天体 · SOLAR SYSTEM BODY',
-
-  // 抽屉 data-grid 字段
-  info_diameter:  '直径 · DIAMETER',
-  info_mass:      '质量 · MASS',
-  info_day:       '自转周期 · ROTATION',
-  info_year:      '公转周期 · ORBITAL PERIOD',
-  info_temp:      '温度 · TEMPERATURE',
-  info_moons:     '卫星数 · MOONS',
-  info_gravity:   '表面重力 · SURFACE GRAVITY',
-  info_age:       '年龄 · AGE',
-  info_luminosity:'光度 · LUMINOSITY',
+  // ============ info-panel 专用 (单语切换, 由 lang 决定显示哪边) ============
+  // info-panel 字段
+  info_diameter:  { zh: '直径',       en: 'Diameter' },
+  info_mass:      { zh: '质量',       en: 'Mass' },
+  info_day:       { zh: '自转周期',   en: 'Rotation' },
+  info_year:      { zh: '公转周期',   en: 'Orbital Period' },
+  info_temp:      { zh: '温度',       en: 'Temperature' },
+  info_moons:     { zh: '卫星数',     en: 'Moons' },
+  info_gravity:   { zh: '表面重力',   en: 'Surface Gravity' },
+  info_age:       { zh: '年龄',       en: 'Age' },
+  info_luminosity:{ zh: '光度',       en: 'Luminosity' },
+  info_type_sun:  { zh: 'G2V 型黄矮星', en: 'G2V Yellow Dwarf' },
+  info_type_body: { zh: '太阳系天体',   en: 'Solar System Body' },
+  // v20260702e: planet type 也走字典 (类地行星/气态巨行星/冰巨行星)
+  type_terrestrial:    { zh: '类地行星 · 岩石行星',  en: 'Terrestrial · Rocky Planet' },
+  type_gas_giant:      { zh: '气态巨行星',           en: 'Gas Giant' },
+  type_ringed:         { zh: '气态巨行星 · 带环行星', en: 'Gas Giant · Ringed' },
+  type_ice_giant:      { zh: '冰巨行星',             en: 'Ice Giant' },
+  type_home:           { zh: '类地行星 · 我们的家园', en: 'Terrestrial · Our Home' },
 };
 
-/** 拼接双语字符串, key 不存在时返回 key 本身 */
+/** 拼接双语字符串 (用于底部 dock / 通用) */
 export function bi(key) {
   const v = DICT[key];
   if (v === undefined) return key;
   return typeof v === 'string' ? v : v.join(' · ');
 }
 
-/** 给需要保留两个独立标签的场景 (例如 .k 是 key, .v 是 value) */
-export function biParts(key) {
+/** 单语查询 (用于 info-panel) */
+export function infoT(key, lang = 'zh') {
   const v = DICT[key];
-  if (v === undefined) return [key, ''];
-  if (typeof v === 'string') return ['', v];
-  return v;
+  if (v === undefined) return key;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object' && v[lang] !== undefined) return v[lang];
+  // 数组形式 (['中文', '英文']) — 退化兼容
+  if (Array.isArray(v)) return lang === 'en' ? v[1] : v[0];
+  return key;
 }
 
-/** 把字典刷到所有 [data-i18n] 元素 */
+/** 把字典刷到所有 [data-i18n] 元素 (底部 dock 用) */
 export function applyI18n() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
@@ -96,7 +108,21 @@ export function applyI18n() {
   });
 }
 
-/** 初始化 — 加载首帧 (无切换按钮, 所以不绑事件) */
+/** 初始化 — 底部 dock + info-panel 切换按钮 */
 export function initI18n() {
   applyI18n();
+
+  // info-panel 内嵌的 lang toggle
+  // 监听事件, info-panel 重画逻辑在 ui.js initInfoPanel 里
+  document.querySelectorAll('#info-panel .lang-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lang = btn.dataset.lang;
+      // 切 active 态
+      document.querySelectorAll('#info-panel .lang-toggle button').forEach(b => {
+        b.classList.toggle('active', b.dataset.lang === lang);
+      });
+      // 派发事件, ui.js 监听并重画 info-panel
+      window.dispatchEvent(new CustomEvent('info-lang-changed', { detail: { lang } }));
+    });
+  });
 }

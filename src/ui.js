@@ -6,7 +6,7 @@ import { sunGlowSprites } from './planets.js';
 import { startTracking, stopTracking } from './tracking.js';
 import { regenerateStars } from './scene.js';
 import { setGlowEnabled } from './lighting.js';
-import { bi, biParts, applyI18n } from './i18n.js';
+import { bi, infoT } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 
@@ -150,32 +150,74 @@ export function initCollapse() {
 
 
 export function initInfoPanel() {
-  window.addEventListener('show-info', (e) => {
-    const d = e.detail;
-    // v20260702d: 双语并列 — 行星名格式 "中文 (English)"
-    $('info-name').textContent = d.en ? `${d.name} (${d.en})` : d.name;
-    $('info-type').textContent = d.type || (d.isSun ? bi('info_type_sun') : bi('info_type_body'));
+  // v20260702e: 缓存当前展示的详情, info-panel 内嵌按钮切换语言时重画
+  let _currentDetail = null;
+  // 当前 info-panel 语言, 初始 'zh' (跟按钮 active 态同步)
+  let _infoLang = 'zh';
+
+  // v20260702e: planet type 中英映射 (从 data.type 字符串识别)
+  // — 类地行星/气态巨行星/带环/冰巨/家园 都走字典
+  const TYPE_KEY_MAP = {
+    '类地行星 · 岩石行星':     'type_terrestrial',
+    '类地行星 · 我们的家园':   'type_home',
+    '气态巨行星 (Gas Giant)':  'type_gas_giant',
+    '气态巨行星 · 带环行星':   'type_ringed',
+    '冰巨行星 (Ice Giant)':    'type_ice_giant',
+  };
+
+  function render(d) {
+    // 行星名: 单语模式 — 中文模式显示 "太阳 (Sun)" / 英文模式显示 "Sun (太阳)"
+    if (d.en) {
+      $('info-name').textContent = _infoLang === 'en'
+        ? `${d.en} (${d.name})`
+        : `${d.name} (${d.en})`;
+    } else {
+      $('info-name').textContent = d.name;
+    }
+    // type 字段: data 自带的中文 → 字典 key → infoT 单语
+    let typeText = d.type;
+    if (typeText) {
+      const typeKey = TYPE_KEY_MAP[typeText];
+      if (typeKey) typeText = infoT(typeKey, _infoLang);
+    } else {
+      typeText = (d.isSun ? infoT('info_type_sun', _infoLang) : infoT('info_type_body', _infoLang));
+    }
+    $('info-type').textContent = typeText;
     if (d.facts){
       const grid = $('info-data'); grid.innerHTML='';
       const labels = {
-        diameter:   bi('info_diameter'),
-        mass:       bi('info_mass'),
-        day:        bi('info_day'),
-        year:       bi('info_year'),
-        temp:       bi('info_temp'),
-        moons:      bi('info_moons'),
-        gravity:    bi('info_gravity'),
-        age:        bi('info_age'),
-        luminosity: bi('info_luminosity'),
+        diameter:   infoT('info_diameter',   _infoLang),
+        mass:       infoT('info_mass',       _infoLang),
+        day:        infoT('info_day',        _infoLang),
+        year:       infoT('info_year',       _infoLang),
+        temp:       infoT('info_temp',       _infoLang),
+        moons:      infoT('info_moons',      _infoLang),
+        gravity:    infoT('info_gravity',    _infoLang),
+        age:        infoT('info_age',        _infoLang),
+        luminosity: infoT('info_luminosity', _infoLang),
       };
       Object.entries(d.facts).forEach(([k,v])=>{
         grid.innerHTML += `<div class="k">${labels[k]||k}</div><div class="v">${v}</div>`;
       });
     }
     $('info-fact').innerHTML = d.fact || '';
+  }
+
+  window.addEventListener('show-info', (e) => {
+    _currentDetail = e.detail;
+    render(_currentDetail);
     $('info-panel').classList.add('show');
   });
-  $('info-close').addEventListener('click', ()=> $('info-panel').classList.remove('show'));
+  $('info-close').addEventListener('click', ()=> {
+    $('info-panel').classList.remove('show');
+    _currentDetail = null;
+  });
+
+  // v20260702e: info-panel 内嵌 lang toggle 切换
+  window.addEventListener('info-lang-changed', (e) => {
+    _infoLang = e.detail.lang;
+    if (_currentDetail) render(_currentDetail);
+  });
 }
 
 /* 图例点击 = 切换追踪 */
@@ -193,8 +235,12 @@ export function initLegend() {
     item.dataset.name = m.userData.name;
     const color = m.userData.isSun ? '#ffcc55' :
                   m.userData.data.color ? '#'+m.userData.data.color.toString(16).padStart(6,'0') : '#aaaaaa';
+    // v20260702e: 行星名双语并列 — 太阳 (Sun)
+    // — 优先从 userData.data.en 取 (行星); 太阳没 data, 走 userData.en
+    // — 兜底: 太阳的 en 在这里硬编码, 因为 planets.js 加载顺序有时序坑
+    const en = m.userData.data?.en || m.userData.en || (m.userData.isSun ? 'Sun' : '');
     item.innerHTML = `<span class="dot" style="background:${color};color:${color}"></span>
-      ${m.userData.name}`;
+      <span class="name-zh">${m.userData.name}</span>${en ? `<span class="name-en">${en}</span>` : ''}`;
     item.onclick = (e)=>{
       e.stopPropagation();
       // 修 #2: 再次点击同一目标不再取消，改为重新飞过去

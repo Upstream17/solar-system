@@ -72,7 +72,7 @@ export async function makeSun(scene) {
     depthWrite: true
   });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.userData = { isSun:true, name:'太阳', size:SUN_R, type:'恒星 G2V 型 · 黄矮星',
+  mesh.userData = { isSun:true, name:'太阳', en:'Sun', size:SUN_R, type:'恒星 G2V 型 · 黄矮星',
     facts:{ diameter:'1,392,700 km', mass:'1.99×10³⁰ kg', age:'46 亿年',
             temp:'表面 5,500 °C · 核心 1,500 万 °C', gravity:'274 m/s²', luminosity:'3.83×10²⁶ W' },
     fact:'<b>太阳</b>是太阳系的中心天体，占系统总质量的 99.86%。<br>每秒将约 600 万吨氢聚变成氦。<br>光从太阳表面到达地球约需 8 分 20 秒。' };

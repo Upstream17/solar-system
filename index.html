@@ -262,55 +262,53 @@
   #info-panel .fact b { color: var(--accent); font-weight: 500; }
 
   /* ==========================================================
-   * Tracking 浮条 — 左下角（不在 dock 也不在 title bar）
+   * Tracking 状态行 — 集成在 #legend-list 上方 (v20260702f)
+   * — 替代之前的左下角浮条 (挡 CONTROLS 标签)
+   * — 只在追踪时 display:flex, 否则 display:none
+   * — 复用 pulse / stop-btn / esc-hint 样式
    * ========================================================== */
-  #tracking-badge {
-    position: absolute;
-    bottom: 14px;
-    left: 14px;
-    display: none;
+  .tracking-row {
+    display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 8px 10px 16px;
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: var(--radius);
-    backdrop-filter: blur(18px) saturate(140%);
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    gap: 8px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    background: rgba(126, 182, 255, 0.06);
+    border: 1px solid rgba(126, 182, 255, 0.2);
+    border-radius: 6px;
     font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 2px;
+    font-size: 10.5px;
+    letter-spacing: 1.5px;
     color: var(--accent);
-    z-index: 100;
-    box-shadow: var(--shadow-glow);
   }
-  #tracking-badge.show { display: inline-flex; }
-  #tracking-badge .pulse {
+  .tracking-row .pulse {
     width: 6px; height: 6px;
     border-radius: 50%;
     background: var(--accent);
     box-shadow: 0 0 8px var(--accent);
     animation: pulse 2s ease-in-out infinite;
+    flex-shrink: 0;
   }
   @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50%      { opacity: 0.5; transform: scale(0.8); }
   }
-  #tracking-badge .target-name { color: var(--text); margin: 0 6px; }
-  #tracking-badge .esc-hint { color: var(--text-dim); font-size: 9.5px; }
-  #tracking-badge .stop-btn {
+  .tracking-row .target-name { color: var(--text); flex: 1; min-width: 0; }
+  .tracking-row .esc-hint { color: var(--text-dim); font-size: 9.5px; flex-shrink: 0; }
+  .tracking-row .stop-btn {
     background: transparent;
     border: 1px solid rgba(255, 71, 71, 0.4);
     color: #ff8888;
     border-radius: 4px;
-    padding: 4px 10px;
-    font-size: 10.5px;
+    padding: 3px 8px;
+    font-size: 10px;
     letter-spacing: 1.5px;
     cursor: pointer;
     font-family: var(--font-mono);
     transition: all var(--t-fast);
+    flex-shrink: 0;
   }
-  #tracking-badge .stop-btn:hover {
+  .tracking-row .stop-btn:hover {
     background: rgba(255, 71, 71, 0.15);
     color: #ffaaaa;
     border-color: rgba(255, 71, 71, 0.6);
@@ -556,11 +554,7 @@
       border-radius: 14px 14px 0 0;
     }
 
-    #tracking-badge {
-      bottom: auto;
-      top: 14px;
-      left: 14px;
-    }
+    /* v20260702f: 删 tracking-badge 移动端定位, 它整合到图例了 */
   }
 
   /* 滚动条 — SpaceX 风细线 */
@@ -674,29 +668,30 @@
     </div>
   </section>
 
-  <!-- 行星图例 -->
+  <!-- v20260702f: 星球图例 (太阳是恒星, 不是行星) -->
   <section class="panel" id="panel-legend" data-collapse>
     <div class="panel-header" data-collapse-btn>
-      <span class="title" data-i18n="title_planets">行星图例 · Planets</span>
+      <span class="title" data-i18n="title_planets">星球图例 · Bodies</span>
       <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
     </div>
     <div class="panel-body">
       <div class="panel-hint-text" data-i18n="legend_hint">点击追踪 · 再次点击取消 · CLICK TO TRACK · CLICK AGAIN TO RELEASE</div>
+      <!-- v20260702f: 追踪状态行集成到图例顶部, 替代左下角浮条 (挡 CONTROLS 标签) -->
+      <div id="legend-tracking" class="tracking-row" style="display:none;">
+        <span class="pulse"></span>
+        <span data-i18n="tracking">追踪中 · TRACKING</span>
+        <span class="target-name" id="tracking-name">—</span>
+        <button class="stop-btn" id="tracking-stop-btn" data-i18n="stop">停止 · STOP</button>
+        <span class="esc-hint">ESC</span>
+      </div>
       <div id="legend-list"></div>
     </div>
   </section>
 </div>
 
-<!-- 追踪浮条（左下角） -->
-<div id="tracking-badge">
-  <span class="pulse"></span>
-  <span data-i18n="tracking">追踪中 · TRACKING</span>
-  <span class="target-name" id="tracking-name">—</span>
-  <button class="stop-btn" id="tracking-stop-btn" data-i18n="stop">停止 · STOP</button>
-  <span class="esc-hint">ESC</span>
-</div>
+<!-- v20260702f: 删底部追踪浮条, 整合到 #legend-tracking (图例顶部) -->
 
 <!-- 星球信息面板（右侧抽屉） -->
 <div id="info-panel">
@@ -740,6 +735,6 @@
   });
 </script>
 
-<script type="module" src="./src/main.js?v=20260702e"></script>
+<script type="module" src="./src/main.js?v=20260702f"></script>
 </body>
 </html>

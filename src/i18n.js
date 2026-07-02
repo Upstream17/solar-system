@@ -19,7 +19,8 @@ const DICT = {
   // panel 标题
   title_controls:  ['操作提示',  'Controls'],
   title_dashboard: ['仪表盘',    'Dashboard'],
-  title_planets:   ['行星图例',  'Planets'],
+  // v20260702f: title_planets 改 "星球图例" / "Bodies" — 太阳是恒星不是行星
+  title_planets:   ['星球图例',  'Bodies'],
 
   // dashboard sliders
   time:           ['时间流速',   'TIME'],

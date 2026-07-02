@@ -201,12 +201,13 @@ export function tickTracking() {
 
 /* 焦点模式：禁用 OrbitControls（仅在非交互时） */
 function updateTrackingBadge() {
-  const badge = document.getElementById('tracking-badge');
+  // v20260702f: 追踪条整合到图例顶部 (#legend-tracking), 替代左下角浮条
+  const row = document.getElementById('legend-tracking');
   if (focusTarget) {
     document.getElementById('tracking-name').textContent = focusTarget.userData.name;
-    badge.classList.add('show');
+    if (row) row.style.display = 'flex';
   } else {
-    badge.classList.remove('show');
+    if (row) row.style.display = 'none';
   }
 }
 

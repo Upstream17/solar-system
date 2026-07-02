@@ -1,7 +1,7 @@
 /* planets.js — 太阳 + 行星 + 月球 创建 */
 
 import * as THREE from 'three';
-import { SUN_R, PLANETS, MOON } from './constants.js';
+import { SUN_R, PLANETS, MOON, SUN_FACTS } from './constants.js';
 import { safeTexture } from './textures.js';
 import { makeSunGlow } from './lighting.js';
 import { tick as loaderTick } from './loader.js';
@@ -72,10 +72,11 @@ export async function makeSun(scene) {
     depthWrite: true
   });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.userData = { isSun:true, name:'太阳', en:'Sun', size:SUN_R, type:'恒星 G2V 型 · 黄矮星',
+  mesh.userData = { isSun:true, name:'太阳', en:'Sun', size:SUN_R, typeZh:SUN_FACTS.typeZh, typeEn:SUN_FACTS.typeEn,
     facts:{ diameter:'1,392,700 km', mass:'1.99×10³⁰ kg', age:'46 亿年',
             temp:'表面 5,500 °C · 核心 1,500 万 °C', gravity:'274 m/s²', luminosity:'3.83×10²⁶ W' },
-    fact:'<b>太阳</b>是太阳系的中心天体，占系统总质量的 99.86%。<br>每秒将约 600 万吨氢聚变成氦。<br>光从太阳表面到达地球约需 8 分 20 秒。' };
+    factZh:SUN_FACTS.factZh,
+    factEn:SUN_FACTS.factEn };
   scene.add(mesh);
 
   // 4 层 Sprite 辉光（按相机距离分级显示 + 平滑过渡）
@@ -110,7 +111,7 @@ export async function makePlanet(scene, p) {
     mat.bumpScale = 0.04;
   }
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.userData = { isPlanet:true, data:p, name:p.name };
+  mesh.userData = { isPlanet:true, data:p, name:p.name, en:p.en, typeZh:p.typeZh, typeEn:p.typeEn };
 
   // 倾斜容器
   const pivot = new THREE.Object3D();
@@ -192,7 +193,7 @@ export async function makeMoon() {
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:1,
     emissive: new THREE.Color(0xaaaaaa).multiplyScalar(0.06), emissiveIntensity: 0.08 });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.userData = { isPlanet:true, data:MOON, name:MOON.name };
+  mesh.userData = { isPlanet:true, data:MOON, name:MOON.name, en:MOON.en, typeZh:MOON.typeZh, typeEn:MOON.typeEn };
 
   const pivot = new THREE.Object3D();
   pivot.add(mesh);

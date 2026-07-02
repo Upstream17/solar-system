@@ -155,16 +155,6 @@ export function initInfoPanel() {
   // 当前 info-panel 语言, 初始 'zh' (跟按钮 active 态同步)
   let _infoLang = 'zh';
 
-  // v20260702e: planet type 中英映射 (从 data.type 字符串识别)
-  // — 类地行星/气态巨行星/带环/冰巨/家园 都走字典
-  const TYPE_KEY_MAP = {
-    '类地行星 · 岩石行星':     'type_terrestrial',
-    '类地行星 · 我们的家园':   'type_home',
-    '气态巨行星 (Gas Giant)':  'type_gas_giant',
-    '气态巨行星 · 带环行星':   'type_ringed',
-    '冰巨行星 (Ice Giant)':    'type_ice_giant',
-  };
-
   function render(d) {
     // 行星名: 单语模式 — 中文模式显示 "太阳 (Sun)" / 英文模式显示 "Sun (太阳)"
     if (d.en) {
@@ -174,15 +164,11 @@ export function initInfoPanel() {
     } else {
       $('info-name').textContent = d.name;
     }
-    // type 字段: data 自带的中文 → 字典 key → infoT 单语
-    let typeText = d.type;
-    if (typeText) {
-      const typeKey = TYPE_KEY_MAP[typeText];
-      if (typeKey) typeText = infoT(typeKey, _infoLang);
-    } else {
-      typeText = (d.isSun ? infoT('info_type_sun', _infoLang) : infoT('info_type_body', _infoLang));
-    }
-    $('info-type').textContent = typeText;
+    // v20260702f: type 和 fact 走 data 自带的双语字段 (d.typeZh/d.typeEn/d.factZh/d.factEn)
+    // — 之前走字典 + TYPE_KEY_MAP, 太阳/木星等中英硬编码字段切不动
+    // — 现在每颗星球的描述都自带双语, 切 EN 时 type 和 fact 都同步翻
+    const typeKey = _infoLang === 'en' ? 'typeEn' : 'typeZh';
+    $('info-type').textContent = d[typeKey] || d.type || (d.isSun ? infoT('info_type_sun', _infoLang) : infoT('info_type_body', _infoLang));
     if (d.facts){
       const grid = $('info-data'); grid.innerHTML='';
       const labels = {
@@ -200,7 +186,8 @@ export function initInfoPanel() {
         grid.innerHTML += `<div class="k">${labels[k]||k}</div><div class="v">${v}</div>`;
       });
     }
-    $('info-fact').innerHTML = d.fact || '';
+    const factKey = _infoLang === 'en' ? 'factEn' : 'factZh';
+    $('info-fact').innerHTML = d[factKey] || d.fact || '';
   }
 
   window.addEventListener('show-info', (e) => {

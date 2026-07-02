@@ -386,6 +386,17 @@
     text-transform: uppercase;
   }
 
+  /* Planets panel 顶部提示文字：「点击追踪 · 再次点击取消」 */
+  .panel-hint-text {
+    font-size: 10.5px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    padding: 0 0 8px 0;
+    border-bottom: 1px solid var(--panel-border);
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+  }
+
   /* ==========================================================
    * 图例
    * ========================================================== */
@@ -502,7 +513,7 @@
 <div id="dock">
 
   <!-- 操作提示（折叠：只剩 header） -->
-  <section class="panel" id="panel-hint">
+  <section class="panel" id="panel-hint" data-collapse>
     <div class="panel-header" data-collapse-btn>
       <span class="title">Controls</span>
       <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -523,7 +534,7 @@
   <!-- 控制台 -->
   <section class="panel" id="panel-controls" data-collapse>
     <div class="panel-header" data-collapse-btn>
-      <span class="title">Mission Control</span>
+      <span class="title">Dashboard</span>
       <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
@@ -595,12 +606,13 @@
   <!-- 行星图例 -->
   <section class="panel" id="panel-legend" data-collapse>
     <div class="panel-header" data-collapse-btn>
-      <span class="title">Bodies</span>
+      <span class="title">Planets</span>
       <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
     </div>
     <div class="panel-body">
+      <div class="panel-hint-text">点击追踪 · 再次点击取消</div>
       <div id="legend-list"></div>
     </div>
   </section>

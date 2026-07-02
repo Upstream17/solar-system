@@ -164,7 +164,11 @@ export function initInfoPanel() {
     // — 现在每颗星球的描述都自带双语, 切 EN 时 type 和 fact 都同步翻
     const typeKey = _infoLang === 'en' ? 'typeEn' : 'typeZh';
     $('info-type').textContent = d[typeKey] || d.type || (d.isSun ? infoT('info_type_sun', _infoLang) : infoT('info_type_body', _infoLang));
-    if (d.facts){
+    // v20260702g: facts 按 lang 选 (factsEn / factsZh), 之前 facts 字典硬编码中文单位
+    // — 比如 day:'58.6 地球日', EN 模式也显示中文单位
+    // — 兼容: 若 factsZh/factsEn 都没有, 退回 d.facts (旧数据)
+    const factsData = d.factsZh || d.factsEn || d.facts;
+    if (factsData){
       const grid = $('info-data'); grid.innerHTML='';
       const labels = {
         diameter:   infoT('info_diameter',   _infoLang),
@@ -177,11 +181,9 @@ export function initInfoPanel() {
         age:        infoT('info_age',        _infoLang),
         luminosity: infoT('info_luminosity', _infoLang),
       };
-      // v20260702g: facts 按 lang 选 (factsEn / factsZh), 之前 facts 字典硬编码中文单位
-      // — 比如 day:'58.6 地球日', EN 模式也显示中文单位
-      const factsKey = _infoLang === 'en' ? 'factsEn' : 'factsZh';
-      const factsData = d[factsKey] || d.facts || {};
-      Object.entries(factsData).forEach(([k,v])=>{
+      // 选当前 lang 对应的子集 (zh 用 factsZh, en 用 factsEn), 都没就兜底用 factsData
+      const factsLangData = (_infoLang === 'en' ? d.factsEn : d.factsZh) || factsData;
+      Object.entries(factsLangData).forEach(([k,v])=>{
         grid.innerHTML += `<div class="k">${labels[k]||k}</div><div class="v">${v}</div>`;
       });
     }

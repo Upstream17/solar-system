@@ -5,7 +5,6 @@
 
 基于 **Three.js 0.160** 的太阳系 3D 探索器，纯前端单页应用，无构建步骤，部署到 Cloudflare Pages 即可访问。
 
-🌐 **在线演示**: [solar-system.pages.dev](https://solar-system.pages.dev/)
 
 ## ✨ 主要特性
 

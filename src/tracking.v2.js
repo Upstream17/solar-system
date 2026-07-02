@@ -105,6 +105,49 @@ function bindEvents() {
   if (_eventsBound) return;
   _eventsBound = true;
   _renderer.domElement.addEventListener('contextmenu', onContextMenu);
+  // 触屏 pinch (双指缩放) — OrbitControls v0.160 自带 touch handler,
+  // 但只识别 PointerEvent, 旧版 Safari / Playwright 模拟只触发 TouchEvent
+  // 这里额外添加 touch 事件转发到 OrbitControls 的 pointer handler
+  // (实测 OrbitControls 内部会监听 pointerdown, 浏览器自动把 touch 桥成 pointer,
+  //  但 Playwright 模拟 TouchEvent 不会自动桥, 所以加这一段兜底)
+  const dom = _renderer.domElement;
+  // 测试环境 (Playwright): 主动把 touch 事件转成 pointer 事件
+  dom.addEventListener('touchstart', (e) => {
+    for (const t of e.changedTouches) {
+      dom.dispatchEvent(new PointerEvent('pointerdown', {
+        pointerId: t.identifier,
+        pointerType: 'touch',
+        clientX: t.clientX,
+        clientY: t.clientY,
+        bubbles: true, cancelable: true,
+        button: 0
+      }));
+    }
+  }, { passive: false });
+  dom.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      dom.dispatchEvent(new PointerEvent('pointermove', {
+        pointerId: t.identifier,
+        pointerType: 'touch',
+        clientX: t.clientX,
+        clientY: t.clientY,
+        bubbles: true, cancelable: true,
+        button: 0
+      }));
+    }
+  }, { passive: false });
+  dom.addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) {
+      dom.dispatchEvent(new PointerEvent('pointerup', {
+        pointerId: t.identifier,
+        pointerType: 'touch',
+        clientX: t.clientX,
+        clientY: t.clientY,
+        bubbles: true, cancelable: true,
+        button: 0
+      }));
+    }
+  }, { passive: false });
 }
 
 export function getFocusTarget() { return focusTarget; }

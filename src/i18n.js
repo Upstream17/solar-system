@@ -52,8 +52,9 @@ const DICT = {
   tracking:       '追踪中 · TRACKING',
   stop:           '停止 · STOP',
 
-  // 图例提示
-  legend_hint:    '点击追踪 · 再次点击取消  ·  TAP TO TRACE · TAP AGAIN TO RELEASE',
+  // v20260702j: 已不支持再次点击取消 (commit c152b6f 改: 重复点同一目标 = 无反应, 避免误操作)
+  // 退出追踪: ESC / 追踪条的 × 按钮 / 点击另一个星球切换
+  legend_hint:    '点击追踪 · ESC 或 × 取消  ·  TAP TO TRACE · ESC OR × TO RELEASE',
 
   // footer
   footnote:       'AU 真实 · 体积艺术夸张  ·  AU TRUE-TO-SCALE · VOLUME ARTISTIC',

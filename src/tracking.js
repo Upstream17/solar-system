@@ -202,12 +202,17 @@ export function tickTracking() {
 /* 焦点模式：禁用 OrbitControls（仅在非交互时） */
 function updateTrackingBadge() {
   // v20260702f: 追踪条整合到图例顶部 (#legend-tracking), 替代左下角浮条
+  // — 加 null check 防御: 老版本浏览器可能缓存了 #tracking-badge 已被删的代码
   const row = document.getElementById('legend-tracking');
+  const legacy = document.getElementById('tracking-badge');
+  const nameEl = document.getElementById('tracking-name');
   if (focusTarget) {
-    document.getElementById('tracking-name').textContent = focusTarget.userData.name;
+    if (nameEl) nameEl.textContent = focusTarget.userData.name;
     if (row) row.style.display = 'flex';
+    if (legacy) legacy.classList.add('show');
   } else {
     if (row) row.style.display = 'none';
+    if (legacy) legacy.classList.remove('show');
   }
 }
 

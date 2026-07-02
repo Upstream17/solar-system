@@ -6,7 +6,7 @@ import { initScene, updateStarsTime, updateStarPositions } from './scene.js';
 import { initLighting } from './lighting.js';
 import { makeSun, makePlanet, makeMoon, makeOrbit } from './planets.js';
 import { scaleScene, getDisplayDistance } from './scale.js';
-import { initTracking, tickCameraAnim, tickTracking } from './tracking.js';
+import { initTracking, tickCameraAnim, tickTracking } from './tracking.v2.js';
 import {
   initSliders, initToggles, bindStarsToggle,
   initInfoPanel, initLegend, initTrackingStopButton, initSceneClick,

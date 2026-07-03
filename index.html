@@ -626,41 +626,32 @@
     background: rgba(126, 182, 255, 0.08);
   }
 
-  /* 音乐按钮 — 播放时 EQ 跳动 */
-  #ambient-btn {
-    position: relative;
+  /* 音乐按钮 — 播放时显示音波, 暂停时显示斜杠 (mute 语义)
+   * — 图标始终是扬声器主体, 状态通过右侧音波 vs 斜杠区分
+   * — 颜色: 播放 accent 蓝 (正在工作), 暂停 warn 红 (视觉强调关闭) */
+  #ambient-btn { position: relative; }
+  /* 暂停 (默认): 斜杠显示, 音波隐藏, 颜色 warn 红 */
+  #ambient-btn:not(.playing) {
+    color: var(--warn);
   }
-  #ambient-btn.playing { color: var(--accent); }
-  #ambient-btn .eq {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    gap: 2px;
-    padding-bottom: 9px;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity var(--t-fast);
+  #ambient-btn:not(.playing) #ambient-icon-slash  { display: block; }
+  #ambient-btn:not(.playing) #ambient-icon-waves { display: none; }
+  /* 播放中: 音波显示, 斜杠隐藏, 颜色 accent 蓝 */
+  #ambient-btn.playing {
+    color: var(--accent);
   }
-  #ambient-btn.playing .eq { opacity: 1; }
-  #ambient-btn .eq span {
-    width: 2px;
-    background: currentColor;
-    border-radius: 1px;
-    height: 4px;
-    box-shadow: 0 0 4px currentColor;
+  #ambient-btn.playing #ambient-icon-slash  { display: none; }
+  #ambient-btn.playing #ambient-icon-waves { display: inline; }
+
+  /* 斜杠出现的瞬间轻微闪烁, 强调"已关闭"反馈 */
+  @keyframes slash-flash {
+    0%   { stroke-opacity: 0; }
+    50%  { stroke-opacity: 1; }
+    100% { stroke-opacity: 1; }
   }
-  #ambient-btn.playing .eq span:nth-child(1) { animation: eq 1.1s ease-in-out infinite; }
-  #ambient-btn.playing .eq span:nth-child(2) { animation: eq 1.4s ease-in-out infinite 0.2s; }
-  #ambient-btn.playing .eq span:nth-child(3) { animation: eq 0.9s ease-in-out infinite 0.5s; }
-  @keyframes eq {
-    0%, 100% { height: 4px; }
-    50%      { height: 14px; }
+  #ambient-btn:not(.playing) #ambient-icon-slash {
+    animation: slash-flash 250ms var(--ease);
   }
-  /* 播放时隐藏主图标，只显示 EQ */
-  #ambient-btn.playing #ambient-icon-play,
-  #ambient-btn.playing #ambient-icon-pause { display: none; }
 
   /* 移动端：移到右上角 */
   @media (max-width: 768px) {
@@ -753,15 +744,18 @@
   <button id="ambient-btn" class="float-btn" type="button"
           aria-label="切换背景音乐" aria-pressed="false"
           title="背景音乐 · Ambient Drone (浩瀚静谧)">
-    <svg id="ambient-icon-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <path fill="currentColor" d="M3 9.5v5h4l5 4V5.5L7 9.5H3Zm13.5 3a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12Zm-2.5-9.93v2.06A7 7 0 0 1 19.5 12a7 7 0 0 1-2.5 5.37v2.06A9 9 0 0 0 21.5 12a9 9 0 0 0-4-7.43Z"/>
+    <svg id="ambient-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <!-- 扬声器主体（始终显示） -->
+      <path fill="currentColor" d="M3 9.5v5h4l5 4V5.5L7 9.5H3Z"/>
+      <!-- 右侧音波（播放时显示） -->
+      <g id="ambient-icon-waves" style="display:none;">
+        <path fill="currentColor" d="M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12Z"/>
+        <path fill="currentColor" d="M14 2.07v2.06A7 7 0 0 1 19.5 12a7 7 0 0 1-2.5 5.37v2.06A9 9 0 0 0 21.5 12a9 9 0 0 0-4-7.43Z"/>
+      </g>
+      <!-- 关闭斜杠（暂停时显示，从右上到左下） -->
+      <line id="ambient-icon-slash" x1="3" y1="21" x2="21" y2="3"
+            stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="display:none;"/>
     </svg>
-    <svg id="ambient-icon-pause" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" style="display:none;">
-      <path fill="currentColor" d="M3 9.5v5h4l5 4V5.5L7 9.5H3Zm13.5-6.93v2.06A7 7 0 0 1 19.5 12a7 7 0 0 1-2.5 5.37v2.06A9 9 0 0 0 21.5 12a9 9 0 0 0-4-7.43ZM14 7v10l-2-1V8l2-1Z"/>
-    </svg>
-    <span id="ambient-eq" aria-hidden="true">
-      <span></span><span></span><span></span>
-    </span>
   </button>
 </div>
 

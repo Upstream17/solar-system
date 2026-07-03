@@ -70,27 +70,28 @@ function buildLayers() {
   lfo.connect(lfoGain);
   lfo.start();
 
-  // L1: 基底 drone（A1 + E2 五度）
+  // L1: 基底 drone（A1 + E2 五度, sine）
+  //  — 单层 0.32, 2 路叠加 ≈ -18 dBFS, 体感在胸腔
   [55, 82.4].forEach(f => {
     const o = ctx.createOscillator();
     o.type = 'sine';
     o.frequency.value = f;
     const g = ctx.createGain();
-    g.gain.value = 0.18;          // 单层音量, 2 路叠加 ≈ -21 dBFS
+    g.gain.value = 0.32;
     o.connect(g);
     g.connect(masterGain);
     o.start();
   });
 
   // L2: 中频 pad（A3 + E4 + A4, triangle）
+  //  — 单层 0.18, 3 路叠加 ≈ -17 dBFS
   [220, 330, 440].forEach(f => {
     const o = ctx.createOscillator();
     o.type = 'triangle';
     o.frequency.value = f;
-    // detune LFO 调制 — 每个音独立连一份 lfoGain
     lfoGain.connect(o.detune);
     const g = ctx.createGain();
-    g.gain.value = 0.08;
+    g.gain.value = 0.18;
     o.connect(g);
     g.connect(masterGain);
     o.start();
@@ -103,7 +104,7 @@ function buildLayers() {
     o.frequency.value = f;
     lfoGain.connect(o.detune);
     const g = ctx.createGain();
-    g.gain.value = 0.04;
+    g.gain.value = 0.10;
     o.connect(g);
     g.connect(masterGain);
     o.start();
@@ -124,18 +125,14 @@ function buildLayers() {
   bp.frequency.value = 1800;
   bp.Q.value = 0.6;
 
+  // 噪声底是"宇宙微波背景"质感, 比之前调大一倍更明显
   const noiseGain = ctx.createGain();
-  noiseGain.gain.value = 0.06;
+  noiseGain.gain.value = 0.12;
 
   noiseSrc.connect(bp);
   bp.connect(noiseGain);
   noiseGain.connect(masterGain);
   noiseSrc.start();
-
-  // 全局 LowPass（再加一层兜底, 防止高频层过亮）
-  // — 但因为 masterGain 是最终端, 此处不能插在 masterGain 后
-  // — 实际上 L3 已经足够轻 + L4 已经 bandpass, 不需要额外 LowPass
-  // — 保留这条注释以备后续扩展
 }
 
 /* fade 辅助 — 用 setTargetAtTime 平滑, 避免 click noise */
@@ -162,11 +159,13 @@ export async function play() {
     try { await ctx.resume(); } catch (e) { console.warn('[ambient] resume failed', e); }
   }
   if (!isStarted) {
-    fadeTo(0.18, FADE_IN_S);
+    // 0.42: 比之前 0.18 翻一倍多, 笔记本默认音量也能听到
+    // 4 层叠加峰值 ≈ 0.55, 主音域 50-1500Hz 不刺耳
+    fadeTo(0.42, FADE_IN_S);
     isStarted = true;
   } else {
-    // 已经在播, 取消暂停状态（fade 回到 0.18）
-    fadeTo(0.18, FADE_IN_S);
+    // 已经在播, 取消暂停状态（fade 回到 0.42）
+    fadeTo(0.42, FADE_IN_S);
   }
   return true;
 }

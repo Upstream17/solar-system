@@ -238,6 +238,28 @@ export function initLegend() {
   });
 }
 
+/* 浮动工具按钮 — GitHub 链接 + 背景音乐 toggle
+ * — GitHub: 纯 <a target="_blank">, 不需要 JS
+ * — 音乐: 调 ambient 模块 toggle, 同步按钮 .playing class + aria-pressed
+ */
+export function initFloatingTools() {
+  const btn = document.getElementById('ambient-btn');
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    // 懒加载 ambient 模块 — 用户第一次点时才 import, 减少初始 bundle 解析
+    // （虽然 ESM 不支持真正的 lazy, 但 import() 是动态的, 不阻塞首屏）
+    const ambient = await import('./ambient.js');
+    const playing = await ambient.toggle();
+    btn.classList.toggle('playing', playing);
+    btn.setAttribute('aria-pressed', String(playing));
+    btn.setAttribute('title',
+      playing
+        ? '背景音乐 · 播放中 (点击暂停)'
+        : '背景音乐 · Ambient Drone (浩瀚静谧)');
+  });
+}
+
 /* 追踪徽章的"停止"按钮 */
 export function initTrackingStopButton() {
   $('tracking-stop-btn').addEventListener('click', (e)=>{

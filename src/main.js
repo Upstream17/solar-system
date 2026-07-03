@@ -10,6 +10,7 @@ import { initTracking, tickCameraAnim, tickTracking } from './tracking.v2.js';
 import {
   initSliders, initToggles, bindStarsToggle,
   initInfoPanel, initLegend, initTrackingStopButton, initSceneClick,
+  initFloatingTools,
   getSpeedFactor, initCollapse
 } from './ui.js';
 import { initI18n } from './i18n.js';
@@ -89,7 +90,10 @@ async function init() {
     // 11. 图例
     initLegend();
 
-    // 12. resize
+    // 12. 浮动工具按钮（GitHub + 背景音乐）
+    initFloatingTools();
+
+    // 13. resize
     addEventListener('resize', ()=>{
       camera.aspect = innerWidth/innerHeight;
       camera.updateProjectionMatrix();
@@ -97,7 +101,7 @@ async function init() {
       composer.setSize(innerWidth, innerHeight);  // composer 也要同步
     });
 
-    // 13. 主循环
+    // 14. 主循环
     const clock = new THREE.Clock();
     function tick() {
       // deltaReal: 真实经过时间（相机动画、星空旋转用这个，跟 speedFactor 无关）

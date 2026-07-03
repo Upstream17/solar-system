@@ -626,24 +626,21 @@
     background: rgba(126, 182, 255, 0.08);
   }
 
-  /* 音乐按钮 — 两个独立 SVG 互相 display 切换
-   * — 播放中: accent 蓝 + 完整扬声器 (扬声器主体 + 2 层音波)
-   * — 关闭:   warn 红 + 静音扬声器 (扬声器主体 + 斜杠, 无音波)
-   * — 默认状态: 关闭 (浏览器 autoplay 政策禁止未手势自动播声音, 默认关是诚实状态)
-   * — SVG display 切换用 block, 不用 inline, 避免 SVG 子元素渲染异常
-   * — SVG 在按钮内 absolute 居中 (规则只针对 ambient-btn, 不影响 github-btn) */
-  #ambient-btn { position: relative; }
-  #ambient-btn > svg {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-  }
+  /* 音乐按钮 — 用 emoji (跨浏览器稳定), visibility 切换不占布局
+   * — 播放中: accent 蓝 + 🔊 (音波扬声器)
+   * — 关闭:   warn 红 + 🔇 (静音扬声器)
+   * — 默认: 关闭 (浏览器 autoplay 政策禁止未手势自动播声音) */
   #ambient-btn.playing { color: var(--accent); }
   #ambient-btn:not(.playing) { color: var(--warn); }
-  #ambient-btn.playing #ambient-icon-on  { display: block; }
+  #ambient-btn .amb-icon {
+    font-size: 18px;
+    line-height: 1;
+    /* 关闭时: 显示 off icon (🔇) */
+  }
+  #ambient-btn.playing #ambient-icon-on  { display: inline; }
   #ambient-btn.playing #ambient-icon-off { display: none; }
   #ambient-btn:not(.playing) #ambient-icon-on  { display: none; }
-  #ambient-btn:not(.playing) #ambient-icon-off { display: block; }
+  #ambient-btn:not(.playing) #ambient-icon-off { display: inline; }
 
   /* 移动端：移到右上角 */
   @media (max-width: 768px) {
@@ -736,17 +733,11 @@
   <button id="ambient-btn" class="float-btn" type="button"
           aria-label="切换背景音乐" aria-pressed="false"
           title="背景音乐 · 已关闭 (点击开启)">
-    <!-- 状态 A: 播放中 = 完整扬声器 + 双层音波 (蓝色) -->
-    <svg id="ambient-icon-on" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" style="display:none;">
-      <path fill="currentColor" d="M3 9.5v5h4l5 4V5.5L7 9.5H3Z"/>
-      <path fill="currentColor" d="M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12Z"/>
-      <path fill="currentColor" d="M14 2.07v2.06A7 7 0 0 1 19.5 12a7 7 0 0 1-2.5 5.37v2.06A9 9 0 0 0 21.5 12a9 9 0 0 0-4-7.43Z"/>
-    </svg>
-    <!-- 状态 B: 已关闭 = 静音扬声器 + 斜杠 (红色, 默认显示) -->
-    <svg id="ambient-icon-off" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <path fill="currentColor" d="M3 9.5v5h4l5 4V5.5L7 9.5H3Z"/>
-      <line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-    </svg>
+    <!-- 用 emoji 替代 SVG — 跨浏览器 100% 稳定渲染, 不会有 SVG 显示 bug
+         关闭 = 🔇 (静音扬声器)  播放中 = 🔊 (音波扬声器)
+         通过 CSS visibility 切换, 不影响布局 -->
+    <span id="ambient-icon-on"  class="amb-icon" aria-hidden="true">🔊</span>
+    <span id="ambient-icon-off" class="amb-icon" aria-hidden="true">🔇</span>
   </button>
 </div>
 

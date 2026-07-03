@@ -145,6 +145,7 @@ solar-system/
 - **Three.js** — [mrdoob/three.js](https://github.com/mrdoob/three.js) (MIT)
 - **行星纹理** — Solar System Scope ([solarsystemscope.com](https://www.solarsystemscope.com/textures/)) (CC BY 4.0)
 - **天文数据** — NASA Planetary Fact Sheet
+- **背景音乐** — "Observing The Star" by YD ([OpenGameArt](https://opengameart.org/content/another-space-background-track)) (CC0 1.0)
 
 ## 📄 License
 

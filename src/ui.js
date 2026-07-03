@@ -240,15 +240,23 @@ export function initLegend() {
 
 /* 浮动工具按钮 — GitHub 链接 + 背景音乐 toggle
  * — GitHub: 纯 <a target="_blank">, 不需要 JS
- * — 音乐: 调 ambient 模块 toggle, 同步按钮 .playing class + aria-pressed
- *   .playing 在 → 蓝色 + 显示音波; 不在 → 红色 + 显示斜杠 (mute 语义)
+ * — 音乐: 浏览器 autoplay 政策禁止未手势自动播放带声音的音频 (Chrome 92+),
+ *   所以默认显示"关闭"状态 (红图标 + 斜杠), 用户主动点按钮才播放
+ * — 状态用 .playing class 控制图标 + 颜色
  */
 export function initFloatingTools() {
   const btn = document.getElementById('ambient-btn');
   if (!btn) return;
 
+  // 默认状态: 已关闭 (红图标 + 斜杠)
+  // — 浏览器 autoplay 政策要求必须有用户手势才能播放带声音的音频
+  // — 显示"关闭"是诚实的初始状态, 不会假装在播
+  btn.classList.remove('playing');
+  btn.setAttribute('aria-pressed', 'false');
+  btn.setAttribute('title', '背景音乐 · 已关闭 (点击开启)');
+
+  // 用户点击 toggle
   btn.addEventListener('click', async () => {
-    // 懒加载 ambient 模块 — 用户第一次点时才 import, 减少初始 bundle 解析
     const ambient = await import('./ambient.js');
     const playing = await ambient.toggle();
     btn.classList.toggle('playing', playing);

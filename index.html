@@ -626,32 +626,24 @@
     background: rgba(126, 182, 255, 0.08);
   }
 
-  /* 音乐按钮 — 播放时显示音波, 暂停时显示斜杠 (mute 语义)
-   * — 图标始终是扬声器主体, 状态通过右侧音波 vs 斜杠区分
-   * — 颜色: 播放 accent 蓝 (正在工作), 暂停 warn 红 (视觉强调关闭) */
+  /* 音乐按钮 — 两个独立 SVG 互相 display 切换
+   * — 播放中: accent 蓝 + 完整扬声器 (扬声器主体 + 2 层音波)
+   * — 关闭:   warn 红 + 静音扬声器 (扬声器主体 + 斜杠, 无音波)
+   * — 默认状态: 关闭 (浏览器 autoplay 政策禁止未手势自动播声音, 默认关是诚实状态)
+   * — SVG display 切换用 block, 不用 inline, 避免 SVG 子元素渲染异常
+   * — SVG 在按钮内 absolute 居中 (规则只针对 ambient-btn, 不影响 github-btn) */
   #ambient-btn { position: relative; }
-  /* 暂停 (默认): 斜杠显示, 音波隐藏, 颜色 warn 红 */
-  #ambient-btn:not(.playing) {
-    color: var(--warn);
+  #ambient-btn > svg {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
   }
-  #ambient-btn:not(.playing) #ambient-icon-slash  { display: block; }
-  #ambient-btn:not(.playing) #ambient-icon-waves { display: none; }
-  /* 播放中: 音波显示, 斜杠隐藏, 颜色 accent 蓝 */
-  #ambient-btn.playing {
-    color: var(--accent);
-  }
-  #ambient-btn.playing #ambient-icon-slash  { display: none; }
-  #ambient-btn.playing #ambient-icon-waves { display: inline; }
-
-  /* 斜杠出现的瞬间轻微闪烁, 强调"已关闭"反馈 */
-  @keyframes slash-flash {
-    0%   { stroke-opacity: 0; }
-    50%  { stroke-opacity: 1; }
-    100% { stroke-opacity: 1; }
-  }
-  #ambient-btn:not(.playing) #ambient-icon-slash {
-    animation: slash-flash 250ms var(--ease);
-  }
+  #ambient-btn.playing { color: var(--accent); }
+  #ambient-btn:not(.playing) { color: var(--warn); }
+  #ambient-btn.playing #ambient-icon-on  { display: block; }
+  #ambient-btn.playing #ambient-icon-off { display: none; }
+  #ambient-btn:not(.playing) #ambient-icon-on  { display: none; }
+  #ambient-btn:not(.playing) #ambient-icon-off { display: block; }
 
   /* 移动端：移到右上角 */
   @media (max-width: 768px) {
@@ -743,18 +735,17 @@
   </a>
   <button id="ambient-btn" class="float-btn" type="button"
           aria-label="切换背景音乐" aria-pressed="false"
-          title="背景音乐 · Ambient Drone (浩瀚静谧)">
-    <svg id="ambient-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <!-- 扬声器主体（始终显示） -->
+          title="背景音乐 · 已关闭 (点击开启)">
+    <!-- 状态 A: 播放中 = 完整扬声器 + 双层音波 (蓝色) -->
+    <svg id="ambient-icon-on" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" style="display:none;">
       <path fill="currentColor" d="M3 9.5v5h4l5 4V5.5L7 9.5H3Z"/>
-      <!-- 右侧音波（播放时显示） -->
-      <g id="ambient-icon-waves" style="display:none;">
-        <path fill="currentColor" d="M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12Z"/>
-        <path fill="currentColor" d="M14 2.07v2.06A7 7 0 0 1 19.5 12a7 7 0 0 1-2.5 5.37v2.06A9 9 0 0 0 21.5 12a9 9 0 0 0-4-7.43Z"/>
-      </g>
-      <!-- 关闭斜杠（暂停时显示，从右上到左下） -->
-      <line id="ambient-icon-slash" x1="3" y1="21" x2="21" y2="3"
-            stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="display:none;"/>
+      <path fill="currentColor" d="M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12Z"/>
+      <path fill="currentColor" d="M14 2.07v2.06A7 7 0 0 1 19.5 12a7 7 0 0 1-2.5 5.37v2.06A9 9 0 0 0 21.5 12a9 9 0 0 0-4-7.43Z"/>
+    </svg>
+    <!-- 状态 B: 已关闭 = 静音扬声器 + 斜杠 (红色, 默认显示) -->
+    <svg id="ambient-icon-off" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path fill="currentColor" d="M3 9.5v5h4l5 4V5.5L7 9.5H3Z"/>
+      <line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
     </svg>
   </button>
 </div>

@@ -1,0 +1,8 @@
+# robots.txt — 允许所有搜索引擎抓取
+# https://solarsystem.upstream.eu.cc/
+
+User-agent: *
+Allow: /
+
+# 主站 sitemap 位置 — 搜索引擎抓 robots.txt 时会顺带读这个
+Sitemap: https://solarsystem.upstream.eu.cc/sitemap.xml

@@ -3,9 +3,33 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SOLAR SYSTEM · Simulator</title>
+<title>太阳系 3D 探索器 · Solar System Simulator | Three.js 互动演示</title>
 
-<!-- Favicon — inline SVG (细环 + 中心点 = 行星轨道意象)
+<!-- SEO 核心 meta — 搜索引擎和社交分享都靠这些 -->
+<meta name="description" content="基于 Three.js 的太阳系 3D 探索器,8 大行星 + 月球真实比例轨道,可点击追踪、时间流速控制、真实/演示模式切换。纯前端单页应用,浏览器即开即用。" />
+<meta name="keywords" content="太阳系,3D 探索器,Three.js,行星模拟,WebGL,太阳系演示,行星轨道,solar system,simulator,Three.js demo,interactive 3D" />
+<meta name="author" content="Upstream17" />
+<meta name="robots" content="index, follow" />
+<link rel="canonical" href="https://solarsystem.upstream.eu.cc/" />
+
+<!-- Open Graph (Facebook/LinkedIn/微信 分享卡片) -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="太阳系 3D 探索器 · Solar System Simulator" />
+<meta property="og:description" content="Three.js 真实比例太阳系模拟,8 大行星轨道追踪 + 时间流速控制 + 真实/演示模式切换。浏览器即开即用,无需下载。" />
+<meta property="og:url" content="https://solarsystem.upstream.eu.cc/" />
+<meta property="og:site_name" content="Solar System 3D Explorer" />
+<meta property="og:locale" content="zh_CN" />
+<meta property="og:locale:alternate" content="en_US" />
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="太阳系 3D 探索器 · Solar System Simulator" />
+<meta name="twitter:description" content="Three.js 真实比例太阳系模拟,可点击行星追踪 + 时间流速 + 真实/演示模式。" />
+
+<!-- 海报图(分享卡片缩略图) — 静态 OG image,1.2MB 以内 Cloudflare Pages 直接 serve -->
+<!-- 注:Twitter/微信 自动裁剪居中,行星居中即可 -->
+
+<!-- Favicon — inline SVG
      深底 + accent 色, 跟 UI 一致; 浏览器 tab/Dock 都认 -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2302050a'/%3E%3Cellipse cx='16' cy='16' rx='12' ry='5' fill='none' stroke='%237eb6ff' stroke-width='1.2' opacity='0.7'/%3E%3Cellipse cx='16' cy='16' rx='8' ry='3' fill='none' stroke='%237eb6ff' stroke-width='1' opacity='0.5'/%3E%3Ccircle cx='16' cy='16' r='3.2' fill='%237eb6ff'/%3E%3Ccircle cx='4' cy='16' r='1.2' fill='%237eb6ff' opacity='0.85'/%3E%3Ccircle cx='28' cy='16' r='0.9' fill='%237eb6ff' opacity='0.6'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2302050a'/%3E%3Cellipse cx='16' cy='16' rx='12' ry='5' fill='none' stroke='%237eb6ff' stroke-width='1.2' opacity='0.7'/%3E%3Cellipse cx='16' cy='16' rx='8' ry='3' fill='none' stroke='%237eb6ff' stroke-width='1' opacity='0.5'/%3E%3Ccircle cx='16' cy='16' r='3.2' fill='%237eb6ff'/%3E%3Ccircle cx='4' cy='16' r='1.2' fill='%237eb6ff' opacity='0.85'/%3E%3Ccircle cx='28' cy='16' r='0.9' fill='%237eb6ff' opacity='0.6'/%3E%3C/svg%3E">

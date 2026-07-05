@@ -1,138 +1,88 @@
-/* lighting.js — 光照 + 太阳辉光（v4 — 使用真实 lens flare 贴图）
+/* lighting.js — 光照 + 太阳辉光（v6 — 使用社区 FakeGlowMaterial）
  *
- * 设计核心（放弃程序化贴图，v3 假死）：
- *   1. 直接使用项目里已经准备好的 lensflare0_alpha.png（512×512 暖橙镜头炫光）
- *      — 真实摄影的镜头炫光：中心亮点 + 12 道极细光线 + 暖色弥散圆盘
- *      — 比任何程序化 starburst 都更真实
- *   2. 通过 SpriteMaterial.color 把橙色冲成暖白（用户要求"只要暖白"）
- *   3. 保留 4 层结构但简化为 2 种用途：
- *      - flare 贴图层（lensflare0_alpha）：中近距离主导
- *      - disk 圆盘（保留程序化，作为最外弥散层）
- *   4. 距离分级 + 平滑过渡 / sun 本体淡出 / toggle 全部保留
+ * 设计核心（放弃 sprite 方案，v4-v5 都有 sprite bounding box 边界问题）：
+ *   1. 使用社区标准方案：ektogamat/fake-glow-material-threejs（MIT License, 135 stars）
+ *      — 通过 GLSL shader 在 mesh 上直接计算 fresnel 辉光
+ *      — 不需要 bloom 后处理
+ *      — 中心永远跟 mesh 对齐（解决 v5 中心对不上问题）
+ *      — 没有 sprite bounding box 边界（解决"明显的光圈"问题）
+ *   2. 用两个 fake glow 球叠加：
+ *      - 外层大球（2.0× sunR）：暖白弥散外圈
+ *      - 内层小球（1.3× sunR）：暖白更亮内核
+ *   3. 太阳本体保持 sun.jpg 贴图 + MeshBasicMaterial（不受辉光影响）
+ *   4. toggle 改成控制 glow sphere 的 visible
+ *
+ * 关于 fake glow material 的关键参数：
+ *   - glowInternalRadius: 6.0 越小辉光越集中在边缘（反向思维：值大=更多区域发光）
+ *   - falloff: 0.1 是辉光向边缘衰减的速度（0=不衰减，1=快速衰减）
+ *   - glowSharpness: 0.5 辉光的锐度
+ *   - glowColor: 辉光颜色
  */
 
 import * as THREE from 'three';
-
-/* ========== 贴图加载 ========== */
-
-/* Lens flare 贴图（直接用项目里已经准备好的镜头炫光贴图）
- * lensflare0_alpha.png 原始结构：
- *   - 中心亮白点（占中央约 5-10% 区域）
- *   - 暖橙红色圆球形柔光（覆盖几乎整张图，外圈渐变到透明）
- *   - 一条斜 45° 对角线穿过中心（横穿整个画面的 flare streak）
- *   - 整体颜色暖橙
- *
- * v5 处理：完全放弃 Canvas 处理
- *   - 直接用原始贴图，保留暖橙色（用户最终接受了这个色调，因为"原始贴图并没有明显环形分界"）
- *   - 之前 v4.2 错误：用 distNorm > 0.5 硬切外圈，制造了"分界线"假象
- *   - 正确做法：让 sprite 显示得比贴图"外圈柔光"更大，让外圈自然 fade 进黑色背景
- *   - sprite scale 调到 4.0+ × sunR，让贴图外圈柔和延伸到世界背景里
- */
-let _flareTex = null;
-async function loadFlareTex() {
-  if (_flareTex) return _flareTex;
-  return new Promise((resolve, reject) => {
-    new THREE.TextureLoader().load(
-      './src/textures/lensflare0_alpha.png',
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        _flareTex = tex;
-        resolve(tex);
-      },
-      undefined,
-      (err) => reject(err)
-    );
-  });
-}
-
-/* 程序化圆盘贴图（保留作为最外层弥散）
- * 256×256 径向渐变，柔光外圈
- */
-let _diskTex = null;
-function getDiskTex() {
-  if (_diskTex) return _diskTex;
-  const size = 256;
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-  grad.addColorStop(0.00, 'rgba(255,255,255,1.0)');
-  grad.addColorStop(0.15, 'rgba(255,255,255,0.70)');
-  grad.addColorStop(0.40, 'rgba(255,255,255,0.20)');
-  grad.addColorStop(0.70, 'rgba(255,255,255,0.05)');
-  grad.addColorStop(1.00, 'rgba(255,255,255,0.0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  _diskTex = new THREE.CanvasTexture(c);
-  _diskTex.colorSpace = THREE.SRGBColorSpace;
-  return _diskTex;
-}
-
-/* ========== 配置 ========== */
-
-/* 简化的 3 层配置（v4）：
- *   - flare: lensflare0_alpha 镜头炫光贴图（主层，近距离/中距离显示）
- *   - flare_far: 同贴图但更大、更淡（远距离显示）
- *   - halo: 程序化圆盘（远观弥散）
- *
- * 颜色全部暖白（用 SpriteMaterial.color 把 lensflare0 的暖橙冲成暖白）
- */
-const LAYERS = [
-  // 唯一一层：lens flare 贴图（512×512 原始贴图，不再做任何处理）
-  // 包含：中心亮白点 + 暖橙圆球柔光 + 斜 45° flare streak
-  // baseScale 4.0：让 sprite 显示范围比贴图内容更大，让外圈柔光自然 fade 进黑色背景
-  //   — 不再硬切外圈（之前硬切制造了"分界线"假象）
-  //   — 贴图本身的柔光是平滑的，sprite 大一点就看不到边界
-  // color 0xffffff：保持原始暖橙色调（用户反馈"原图并没有明显环形分界"，原色是对的）
-  { name: 'flare',     baseScale: 4.0, baseOpacity: 0.75, color: 0xffffff, tex: 'flare', range: [0,   800] },
-];
+import FakeGlowMaterial from './FakeGlowMaterial.js';
 
 /* ========== 全局开关 ========== */
 
 let _glowEnabled = true;
 export function setGlowEnabled(v) { _glowEnabled = !!v; }
 
-/* ========== 太阳辉光创建 ========== */
+/* ========== 太阳辉光（FakeGlowMaterial mesh 方案） ========== */
 
-export async function makeSunGlow(sunR) {
-  // 预先加载 lens flare 贴图（异步）
-  const flareTex = await loadFlareTex();
-
-  const sprites = [];
-
-  for (const cfg of LAYERS) {
-    let tex;
-    switch (cfg.tex) {
-      case 'flare': tex = flareTex; break;
-      case 'disk':
-      default:      tex = getDiskTex(); break;
-    }
-
-    const mat = new THREE.SpriteMaterial({
-      map: tex,
-      color: cfg.color,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      depthTest: true,
-      sizeAttenuation: true,
-      opacity: 0,
-      toneMapped: false
-    });
-    const sp = new THREE.Sprite(mat);
-    sp.scale.setScalar(sunR * cfg.baseScale);
-    sp.userData = { cfg, baseScale: sunR * cfg.baseScale };
-    sprites.push(sp);
-  }
-
+/* 创建太阳辉光：返回 { group, meshes, update(cameraDistance, sunMesh) }
+ *  - group: 加到 sun mesh
+ *  - meshes: 内层 + 外层两个 fake glow 球（toggle 控制用）
+ *  - update(): 每帧根据相机距离调整 opacity / 可见性（外层散射、内层亮核）
+ *
+ * 关于 fake glow material 的关键参数（基于"水星 62u / 默认视角 ~100u / 海王星 4808u"）：
+ *   - glowInternalRadius: 越大辉光越集中在边缘，中心越透明
+ *   - falloff: 辉光从中心向边缘的衰减速度（0=不衰减，1=快速衰减）
+ *   - glowSharpness: 辉光锐度（影响 falloff 区间的形状）
+ *   - glowColor: 辉光颜色
+ *
+ * v6.1: 之前的参数过曝 — 整体一片白光。原因是 glowInternalRadius=4.0 + opacity 0.85 太强
+ *       调整：
+ *       - glowInternalRadius 4.0 → 8.0（让辉光集中在边缘，中心透明能看到太阳本体）
+ *       - falloff 0.3 → 0.5（更快衰减）
+ *       - opacity 全部降低
+ */
+/* v6.3 参数大幅收敛：
+ *   - 单 fake glow 球（去掉内层叠加，避免双重 fresnel 叠加）
+ *   - 球尺寸 1.8× sunR — 略大于太阳，让边缘 fresnel 区域覆盖一圈
+ *   - glowInternalRadius=4, falloff=0.7 — 中心 fresnel 接近 0（透明显 sun mesh）
+ *   - opacity 0.7
+ *   - bloom strength 仍 0.15（仅做中心微提亮，不做光晕主体）
+ *
+ * 工作原理：
+ *   - 球的可见区域 = 球体在屏幕上的投影范围
+ *   - 在球的"投影边缘"，法线垂直于相机方向 → fresnel ≈ 0 → 不透明（亮）
+ *   - 在球的"投影中心"，法线正对相机方向 → fresnel ≈ 1 → 透明（看到 sun mesh）
+ *   - sun mesh 本体显示金黄色 sun.jpg 纹理
+ */
+export function makeSunGlow(sunR) {
   const group = new THREE.Group();
-  for (let i = sprites.length - 1; i >= 0; i--) group.add(sprites[i]);
+
+  // 单 fake glow 球（暖白边缘辉光）
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(sunR * 1.8, 64, 64),
+    new FakeGlowMaterial({
+      glowColor: new THREE.Color('#fff5e0'),  // 暖白
+      falloff: 0.7,
+      glowInternalRadius: 4.0,
+      glowSharpness: 0.5,
+      opacity: 0.7
+    })
+  );
+  group.add(glow);
+
+  const meshes = [glow];
+
+  // 缓存原始 opacity（用于距离分级恢复）
+  const baseOpacities = meshes.map(m => m.material.uniforms.opacity.value);
 
   function update(cameraDistance, sunMesh) {
     if (!_glowEnabled) {
-      for (const sp of sprites) {
-        sp.visible = false;
-      }
+      for (const m of meshes) m.visible = false;
       if (sunMesh) {
         sunMesh.material.opacity = 1.0;
         sunMesh.material.transparent = false;
@@ -141,20 +91,14 @@ export async function makeSunGlow(sunR) {
       return;
     }
 
-    for (const sp of sprites) {
-      const cfg = sp.userData.cfg;
-      const [start, end] = cfg.range;
-      const t = THREE.MathUtils.smoothstep(cameraDistance, start, end);
-      sp.material.opacity = cfg.baseOpacity * t;
+    for (const m of meshes) m.visible = true;
 
-      // 远处稍微放大
-      const scaleFactor = 1.0 + Math.min(0.3, Math.max(0, (cameraDistance - 100) / 1500) * 0.3);
-      sp.scale.setScalar(sp.userData.baseScale * scaleFactor);
+    // 距离分级：远距离时辉光更明显（弥散感），近距离时更柔和（避免遮挡）
+    const distFactor = THREE.MathUtils.smoothstep(cameraDistance, 50, 400);  // 0..1
+    // glow opacity: 近距离 0.6×base → 远距离 1.0×base
+    meshes[0].material.uniforms.opacity.value = baseOpacities[0] * (0.6 + 0.4 * distFactor);
 
-      sp.visible = t > 0.001;
-    }
-
-    // 太阳本体按距离淡出
+    // 太阳本体按距离淡出（远处只看到光点）
     if (sunMesh) {
       const t = THREE.MathUtils.smoothstep(cameraDistance, 200, 1500);
       sunMesh.material.opacity = 1.0 - 0.5 * t;
@@ -162,12 +106,13 @@ export async function makeSunGlow(sunR) {
     }
   }
 
-  return { group, sprites, update };
+  return { group, sprites: meshes, meshes, update };
 }
 
 /* ========== 直射光 + 环境光 ========== */
 
 export function initLighting(scene) {
+  // 适度环境光（冷蓝）+ 强太阳直射（暖白 G2V 阳光）
   const ambient = new THREE.AmbientLight(0x8090b0, 0.45);
   scene.add(ambient);
 

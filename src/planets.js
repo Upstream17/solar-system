@@ -67,7 +67,9 @@ export async function makeSun(scene) {
   const mat = new THREE.MeshBasicMaterial({
     map: sunTex,
     color: 0xfff5d8,        // 温和暖白（G2V 真实颜色，不偏黄也不偏冷）
-    toneMapped: false,      // 不参与 tone mapping（保持最亮，配合 bloom 过曝）
+    // v6.3: 改 toneMapped = true — 之前 toneMapped:false 让太阳本体无限亮，跟 fake glow 叠加过曝
+    //        现在受 ACES tone mapping 控制，保留金黄色纹理又能跟辉光区分
+    toneMapped: true,
     transparent: false,
     depthWrite: true
   });

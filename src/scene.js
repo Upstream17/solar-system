@@ -183,19 +183,20 @@ export function initScene() {
   _starsGroup.add(stars);
   _starsObj = stars;
 
-  /* ===== 后处理：Bloom Pass（仅做"中心微提亮"，光晕主体是 sprite）=====
-   * - threshold 0.85：太阳中心触发 bloom，外圈金黄保留细节
-   * - strength 0.3：仅做中心提亮（外圈光晕由 sprite 负责，避免方形）
-   * - radius 0.4：紧凑
-   * 关闭 bloom 时 strength = 0，等同无后处理，太阳呈现清晰纹理
+  /* ===== 后处理：Bloom Pass（仅做"中心微提亮"）=====
+   * v6: 太阳辉光改用 FakeGlowMaterial mesh 方案（不用 sprite）
+   *      → bloom 不再需要做"光晕主体"，只做细微中心提亮即可
+   *      → strength 0.4 → 0.15（降低：避免跟 fake glow 叠加过曝）
+   *      → threshold 0.92 → 0.95（更严格：只对最亮的部分触发）
+   * 关闭 bloom 时 strength = 0，等同无后处理
    */
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(innerWidth, innerHeight),
-    0.4,    // strength（中心提亮；中近距离能看到太阳纹理不被 bloom 糊死）
+    0.15,   // strength（中心微提亮；fake glow 已经在做光晕）
     0.4,    // radius
-    0.92    // threshold（更高 = 只对最亮的太阳中心触发，不影响纹理细节）
+    0.95    // threshold（更高 = 只对最亮的太阳中心触发，不影响纹理细节）
   );
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());

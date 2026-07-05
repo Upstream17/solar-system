@@ -20,7 +20,7 @@
  */
 
 import * as THREE from 'three';
-import FakeGlowMaterial from './FakeGlowMaterial.js';
+import EdgeGlowMaterial from './EdgeGlowMaterial.js';
 
 /* ========== 全局开关 ========== */
 
@@ -46,31 +46,30 @@ export function setGlowEnabled(v) { _glowEnabled = !!v; }
  *       - falloff 0.3 → 0.5（更快衰减）
  *       - opacity 全部降低
  */
-/* v6.3 参数大幅收敛：
- *   - 单 fake glow 球（去掉内层叠加，避免双重 fresnel 叠加）
- *   - 球尺寸 1.8× sunR — 略大于太阳，让边缘 fresnel 区域覆盖一圈
- *   - glowInternalRadius=4, falloff=0.7 — 中心 fresnel 接近 0（透明显 sun mesh）
- *   - opacity 0.7
- *   - bloom strength 仍 0.15（仅做中心微提亮，不做光晕主体）
+/* v6.4: 改用 EdgeGlowMaterial（fork 自 FakeGlowMaterial，翻转 fresnel）
+ *   - 单 edge glow 球（去掉内层叠加）
+ *   - 球尺寸 1.5× sunR — 略大于太阳，让边缘 fresnel 区域在 sun mesh 之外
+ *   - glowInternalRadius=2.0（让 glow 仅在球的最外边缘 ~30% 区域）
+ *   - falloff=0.3（中等过渡区）
+ *   - opacity 0.85
  *
- * 工作原理：
- *   - 球的可见区域 = 球体在屏幕上的投影范围
- *   - 在球的"投影边缘"，法线垂直于相机方向 → fresnel ≈ 0 → 不透明（亮）
- *   - 在球的"投影中心"，法线正对相机方向 → fresnel ≈ 1 → 透明（看到 sun mesh）
- *   - sun mesh 本体显示金黄色 sun.jpg 纹理
+ * 视觉效果：
+ *   - sun mesh 中心（1.0× sunR 半径内）：edge glow 透明 → 看到 sun.jpg 金黄纹理
+ *   - sun mesh 外圈（1.0× ~ 1.5× sunR）：edge glow 渐显 → 暖白边缘晕
+ *   - 球体最外缘（1.5× sunR）：edge glow → 0，自然 fade 到黑色背景
  */
 export function makeSunGlow(sunR) {
   const group = new THREE.Group();
 
-  // 单 fake glow 球（暖白边缘辉光）
+  // 单 edge glow 球（暖白边缘光晕）
   const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(sunR * 1.8, 64, 64),
-    new FakeGlowMaterial({
+    new THREE.SphereGeometry(sunR * 1.5, 64, 64),
+    new EdgeGlowMaterial({
       glowColor: new THREE.Color('#fff5e0'),  // 暖白
-      falloff: 0.7,
-      glowInternalRadius: 4.0,
+      falloff: 0.3,
+      glowInternalRadius: 2.0,
       glowSharpness: 0.5,
-      opacity: 0.7
+      opacity: 0.85
     })
   );
   group.add(glow);

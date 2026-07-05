@@ -82,9 +82,9 @@ export async function makeSun(scene) {
   scene.add(mesh);
 
   // 4 层 Sprite 辉光（按相机距离分级显示 + 平滑过渡）
-  // — 替代官方 Lensflare，sizeAttenuation: true 让近处大、远处小
-  // — 永远输出圆形（径向渐变贴图），杜绝 UnrealBloomPass 的方形外圈
-  const glow = makeSunGlow(SUN_R);
+  // — 使用真实 lens flare 贴图（lensflare0_alpha.png）替代程序化 starburst
+  // — sizeAttenuation: true 让近处大、远处小
+  const glow = await makeSunGlow(SUN_R);
   mesh.add(glow.group);
   // 暴露元素给 toggle（4 个 Sprite：halo / corona / glow / core）
   glow.sprites.forEach(s => sunGlowSprites.push(s));

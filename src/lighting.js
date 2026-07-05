@@ -16,19 +16,17 @@ import * as THREE from 'three';
 /* ========== 贴图加载 ========== */
 
 /* Lens flare 贴图（直接用项目里已经准备好的镜头炫光贴图）
- * lensflare0_alpha.png 是 Three.js 官方 Lensflare 示例用的素材：
- *   - 中心白亮点 + 12 道极细放射光线 + 大圆盘柔光（外圈弥散）
- *   - 原本是暖橙色调
+ * lensflare0_alpha.png 原始结构：
+ *   - 中心亮白点（占中央约 5-10% 区域）
+ *   - 暖橙红色圆球形柔光（覆盖几乎整张图，外圈渐变到透明）
+ *   - 一条斜 45° 对角线穿过中心（横穿整个画面的 flare streak）
+ *   - 整体颜色暖橙
  *
- * 处理步骤：
- *   1. 加载原图
- *   2. 去色（保留亮度，转灰度）—— 这样 sprite color 可以染成任意色调
- *   3. 把外圈 50% 半径以外的像素全部涂黑 —— 去掉贴图本身带的柔光外圈
- *      （用户反馈"还有一个环"，那圈就是贴图自带的柔光外圈）
- *      保留中心 50% 半径内的中心亮点 + 放射光线
- *
- * 去色算法：对每个像素，max(R,G,B) 作为灰度（保留高光细节）
- * 切外圈算法：distNorm > 0.5 时 alpha = 0
+ * v5 处理：完全放弃 Canvas 处理
+ *   - 直接用原始贴图，保留暖橙色（用户最终接受了这个色调，因为"原始贴图并没有明显环形分界"）
+ *   - 之前 v4.2 错误：用 distNorm > 0.5 硬切外圈，制造了"分界线"假象
+ *   - 正确做法：让 sprite 显示得比贴图"外圈柔光"更大，让外圈自然 fade 进黑色背景
+ *   - sprite scale 调到 4.0+ × sunR，让贴图外圈柔和延伸到世界背景里
  */
 let _flareTex = null;
 async function loadFlareTex() {
@@ -37,48 +35,9 @@ async function loadFlareTex() {
     new THREE.TextureLoader().load(
       './src/textures/lensflare0_alpha.png',
       (tex) => {
-        // 加载后用 canvas 处理
-        const img = tex.image;
-        const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const imgData = ctx.getImageData(0, 0, c.width, c.height);
-        const data = imgData.data;
-        const cx = c.width / 2, cy = c.height / 2;
-        const cutoffRadius = Math.min(c.width, c.height) / 2;  // 整个 canvas 的中心半径
-
-        for (let y = 0; y < c.height; y++) {
-          for (let x = 0; x < c.width; x++) {
-            const idx = (y * c.width + x) * 4;
-            const dx = x - cx, dy = y - cy;
-            const distNorm = Math.sqrt(dx * dx + dy * dy) / cutoffRadius;  // 0..1（边缘=1）
-
-            // 1) 去色：取最亮通道作为灰度
-            const lum = Math.max(data[idx], data[idx + 1], data[idx + 2]);
-            data[idx]     = lum;
-            data[idx + 1] = lum;
-            data[idx + 2] = lum;
-
-            // 2) 切外圈：distNorm > 0.5 时把 alpha 设为 0（去掉柔光外圈）
-            if (distNorm > 0.5) {
-              // 用平滑过渡而不是硬切：0.45→0.50 区间内 alpha 从 1 衰减到 0
-              // 这样保留中心 50% 半径，丢弃外圈 50%，过渡区避免硬边
-              const fadeFactor = THREE.MathUtils.smoothstep(distNorm, 0.45, 0.50);
-              data[idx + 3] = Math.round(data[idx + 3] * (1 - fadeFactor));
-            }
-          }
-        }
-        ctx.putImageData(imgData, 0, 0);
-
-        const grayTex = new THREE.CanvasTexture(c);
-        grayTex.colorSpace = THREE.SRGBColorSpace;
-        grayTex.needsUpdate = true;
-        _flareTex = grayTex;
-        // 释放原始贴图
-        tex.dispose();
-        resolve(grayTex);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        _flareTex = tex;
+        resolve(tex);
       },
       undefined,
       (err) => reject(err)
@@ -119,11 +78,13 @@ function getDiskTex() {
  * 颜色全部暖白（用 SpriteMaterial.color 把 lensflare0 的暖橙冲成暖白）
  */
 const LAYERS = [
-  // 唯一一层：lens flare 贴图（512×512 真实镜头炫光，已去色 + 切外圈）
-  // 贴图被切到只剩中心 50% 半径（中心亮点 + 12 道放射光线，无外圈柔光）
-  // baseScale 3.0：补偿切外圈带来的尺寸损失（之前 1.6 是完整贴图，砍掉一半后需要放大）
-  // color 0xfff5e0 暖白：把灰度染成暖白
-  { name: 'flare',     baseScale: 3.0, baseOpacity: 0.85, color: 0xfff5e0, tex: 'flare', range: [0,   800] },
+  // 唯一一层：lens flare 贴图（512×512 原始贴图，不再做任何处理）
+  // 包含：中心亮白点 + 暖橙圆球柔光 + 斜 45° flare streak
+  // baseScale 4.0：让 sprite 显示范围比贴图内容更大，让外圈柔光自然 fade 进黑色背景
+  //   — 不再硬切外圈（之前硬切制造了"分界线"假象）
+  //   — 贴图本身的柔光是平滑的，sprite 大一点就看不到边界
+  // color 0xffffff：保持原始暖橙色调（用户反馈"原图并没有明显环形分界"，原色是对的）
+  { name: 'flare',     baseScale: 4.0, baseOpacity: 0.75, color: 0xffffff, tex: 'flare', range: [0,   800] },
 ];
 
 /* ========== 全局开关 ========== */

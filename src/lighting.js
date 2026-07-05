@@ -97,14 +97,11 @@ function getDiskTex() {
  * 颜色全部暖白（用 SpriteMaterial.color 把 lensflare0 的暖橙冲成暖白）
  */
 const LAYERS = [
-  // 第一层：lens flare 贴图（512×512 真实镜头炫光，已去色）— 中近距离主导
-  // baseScale 1.5：让镜头炫光覆盖约 1.5× sunR（紧凑、不过度）
+  // 唯一一层：lens flare 贴图（512×512 真实镜头炫光，已去色）
+  // baseScale 1.6：让镜头炫光覆盖约 1.6× sunR
+  // 用户反馈"球形光晕去掉"，所以只剩这一层（中心亮点 + 12 道放射光线，无大圆盘）
   // color 0xfff5e0 暖白：把灰度染成暖白
-  { name: 'flare',     baseScale: 1.5, baseOpacity: 0.85, color: 0xfff5e0, tex: 'flare', range: [0,   250] },
-  // 第二层：同贴图更大版本 — 远距离显示
-  { name: 'flare_far', baseScale: 2.5, baseOpacity: 0.55, color: 0xfff5e0, tex: 'flare', range: [150, 600] },
-  // 第三层：程序化圆盘 — 最外弥散（海王星视角下主导）
-  { name: 'halo',      baseScale: 2.0, baseOpacity: 0.08, color: 0xffe8c0, tex: 'disk',  range: [200, 800] },
+  { name: 'flare',     baseScale: 1.6, baseOpacity: 0.85, color: 0xfff5e0, tex: 'flare', range: [0,   800] },
 ];
 
 /* ========== 全局开关 ========== */

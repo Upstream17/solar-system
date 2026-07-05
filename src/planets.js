@@ -67,9 +67,7 @@ export async function makeSun(scene) {
   const mat = new THREE.MeshBasicMaterial({
     map: sunTex,
     color: 0xfff5d8,        // 温和暖白（G2V 真实颜色，不偏黄也不偏冷）
-    // v6.3: 改 toneMapped = true — 之前 toneMapped:false 让太阳本体无限亮，跟 fake glow 叠加过曝
-    //        现在受 ACES tone mapping 控制，保留金黄色纹理又能跟辉光区分
-    toneMapped: true,
+    toneMapped: false,      // 不参与 tone mapping（保持最亮，配合 bloom 过曝）
     transparent: false,
     depthWrite: true
   });
@@ -84,9 +82,9 @@ export async function makeSun(scene) {
   scene.add(mesh);
 
   // 4 层 Sprite 辉光（按相机距离分级显示 + 平滑过渡）
-  // — 使用真实 lens flare 贴图（lensflare0_alpha.png）替代程序化 starburst
-  // — sizeAttenuation: true 让近处大、远处小
-  const glow = await makeSunGlow(SUN_R);
+  // — 替代官方 Lensflare，sizeAttenuation: true 让近处大、远处小
+  // — 永远输出圆形（径向渐变贴图），杜绝 UnrealBloomPass 的方形外圈
+  const glow = makeSunGlow(SUN_R);
   mesh.add(glow.group);
   // 暴露元素给 toggle（4 个 Sprite：halo / corona / glow / core）
   glow.sprites.forEach(s => sunGlowSprites.push(s));

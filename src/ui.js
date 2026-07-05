@@ -66,7 +66,7 @@ export function initToggles(scene, camera, controls) {
   // — 由主循环 glowUpdate() 每帧检查这个标志，避免 per-frame 覆盖 visible
   // — 关闭时：所有 sprite 不可见，sun mesh 完全不透明（无光晕，纯纹理）
   // — 开启时：4 层 sprite 按距离平滑显示，sun mesh 适度淡出
-  const BLOOM_ON = 0.15, BLOOM_OFF = 0.0;  // v6 调整：跟 scene.js 一致
+  const BLOOM_ON = 0.4, BLOOM_OFF = 0.0;
   toggleBloom.addEventListener('change', ()=>{
     const enabled = toggleBloom.checked;
     // 联动 bloomPass（仅做中心提亮，强度很弱）

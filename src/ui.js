@@ -66,17 +66,20 @@ export function initToggles(scene, camera, controls) {
   // — 由主循环 glowUpdate() 每帧检查这个标志，避免 per-frame 覆盖 visible
   // — 关闭时：所有 sprite 不可见，sun mesh 完全不透明（无光晕，纯纹理）
   // — 开启时：4 层 sprite 按距离平滑显示，sun mesh 适度淡出
+  // — 同时控制 GodRaysEffect pass 开关（新方案：screen-space raymarched）
   const BLOOM_ON = 0.4, BLOOM_OFF = 0.0;
   toggleBloom.addEventListener('change', ()=>{
     const enabled = toggleBloom.checked;
     // 联动 bloomPass（仅做中心提亮，强度很弱）
     const pass = window.__bloomPass;
     if (pass) pass.strength = enabled ? BLOOM_ON : BLOOM_OFF;
-    // 设置全局标志 — 主循环 glowUpdate() 会检查这个标志
+    // 设置全局标志 — 主循环 glowUpdate() 会检查这个标志（控制 4 层 sprite）
     setGlowEnabled(enabled);
     // 兼容：直接同步所有 sprite 的 visible（用户切换瞬间立即生效，不必等下一帧）
     sunGlowSprites.forEach(s => { s.visible = enabled; });
-  });
+    // 联动 GodRaysEffect pass（控制 screen-space 光线辐射）
+    if (window.__setGodRaysEnabled) window.__setGodRaysEnabled(enabled);
+    });
 
   // 地球云层开关：遍历所有行星，找到 userData.cloudsMesh 的那个切换 visible
   const toggleClouds = $('toggle-clouds');

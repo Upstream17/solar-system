@@ -25,12 +25,13 @@ let elapsedDays = 0;
 /* 入口 */
 async function init() {
   try {
-    // 1. 场景
-    const { scene, camera, renderer, controls, stars, composer, bloomPass } = initScene();
+// 1. 场景
+    const { scene, camera, renderer, controls, stars, composer, bloomPass, setSunMesh, setGodRaysEnabled } = initScene();
     window.__scene = scene;
-    window.__camera = camera;        // 新增：loader 调试 / collapse 用
+    window.__camera = camera;
     window.__renderer = renderer;
     window.__bloomPass = bloomPass;
+    window.__setGodRaysEnabled = setGodRaysEnabled;  // ui.js 用
 
     // 2. 光照
     const { sunLight } = initLighting(scene);
@@ -39,6 +40,9 @@ async function init() {
     // 3. 太阳（辉光 Sprite 内部生成）
     const sun = await makeSun(scene);
     window.__sun = sun;
+    // 3.1 把 sun mesh 注入 GodRaysEffect（后处理链）
+    // — GodRaysEffect 需要 sun mesh 作为 lightSource，从 sun 屏幕坐标辐射光线
+    setSunMesh(sun);
 
     // 4. 行星
     const planetObjs = [];
@@ -59,7 +63,11 @@ async function init() {
     window.__moon = moonObj;
 
     // 6. 太阳轨道环
-    scene.add(makeOrbit(SUN_R * 1.05));
+    // — 之前加了 makeOrbit(SUN_R * 1.05) 作为"中心锚点"提示
+    // — 但 SUN_R=12 时这个 12.6u 的环跟水星轨道 d=31.2 距离过近
+    // — 远观时看起来像"幽灵轨道"（不锚定任何天体）
+    // — godrays 已经提供中心辐射感，不需要这个环做视觉提示
+    // — 删除：scene.add(makeOrbit(SUN_R * 1.05));
 
     // 7. 缩放初始化
     scaleScene(scene, camera, controls);
@@ -159,8 +167,8 @@ async function init() {
       tickTracking();
 
       controls.update();
-      composer.render();  // 用后处理 pipeline 渲染（带 bloom）
-      requestAnimationFrame(tick);
+            composer.render(deltaReal);  // pmndrs EffectComposer 需要传 deltaTime
+            requestAnimationFrame(tick);
     }
     tick();
 

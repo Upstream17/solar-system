@@ -1,11 +1,15 @@
-/* scene.js — Three.js 场景搭建（camera/renderer/controls/stars）+ 后处理 Bloom */
+/* scene.js — Three.js 场景搭建（camera/renderer/controls/stars）+ 后处理 GodRays + Bloom */
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+// 用 pmndrs/postprocessing 的整套后处理（替换 three.js 内置的 EffectComposer/UnrealBloomPass）
+// — 原因：three.js r160 的 examples/jsm 里没有 EffectPass 类
+// — pmndrs 自带 RenderPass / EffectComposer / GodRaysEffect / BloomEffect 都是同一套接口
+import {
+  EffectComposer, RenderPass, EffectPass,
+  GodRaysEffect, BloomEffect,
+  KernelSize, BlendFunction
+} from 'postprocessing';
 
 /* ===== 圆形柔边贴图（程序化生成，去马赛克）===== */
 let _starTex = null;
@@ -15,7 +19,6 @@ function getStarTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');
-  // 径向渐变：中心白 → 边缘 0 透明
   const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
   grad.addColorStop(0.0, 'rgba(255,255,255,1.0)');
   grad.addColorStop(0.3, 'rgba(255,255,255,0.6)');
@@ -28,17 +31,13 @@ function getStarTexture() {
   return _starTex;
 }
 
-/* 星空背景
- * - 用程序化圆形柔边贴图（去方形马赛克）
- * - 用 ShaderMaterial 实现闪烁（每颗星独立速度+相位，sin 调制）
- * - 支持动态调整密度（销毁旧 stars + 创建新 stars）*/
 let _starsObj = null;
 export function makeStars(count, radius, sizeRange) {
   const geo = new THREE.BufferGeometry();
   const pos = new Float32Array(count*3);
   const col = new Float32Array(count*3);
-  const aPhase = new Float32Array(count*2);  // (speed, offset) per star
-  const aBrightness = new Float32Array(count);  // 基础亮度 0.7-1.0
+  const aPhase = new Float32Array(count*2);
+  const aBrightness = new Float32Array(count);
   for (let i=0;i<count;i++) {
     const r = radius + Math.random()*2000;
     const theta = Math.acos(2*Math.random()-1);
@@ -52,7 +51,6 @@ export function makeStars(count, radius, sizeRange) {
     col[i*3]   = b * (tint<0.7?1:1.0);
     col[i*3+1] = b * (tint<0.85?1:0.9);
     col[i*3+2] = b * (tint<0.95?1:0.8);
-    // 闪烁速度 0.3-1.5 Hz（少数星快，多数星慢，看起来不规律）
     aPhase[i*2]   = 0.3 + Math.random() * 1.2;
     aPhase[i*2+1] = Math.random() * Math.PI * 2;
   }
@@ -76,12 +74,9 @@ export function makeStars(count, radius, sizeRange) {
       varying float vTwinkle;
       void main() {
         vColor = color;
-        // 闪烁：sin(time * speed + offset) → 范围 [-1, 1]
-        // 用 pow 把 sin 输出非线性化，让暗部更暗、亮部更亮（更明显的"眨眼"感）
         float s = sin(uTime * aPhase.x + aPhase.y);
-        // pow(0.5 + 0.5*s, 1.5) — sin 波形偏置到 [0,1] 后做 1.5 次方，对比更明显
         float t01 = 0.5 + 0.5 * s;
-        vTwinkle = pow(t01, 1.5) * 0.85 + 0.15;  // 范围 [0.15, 1.0]，暗到 15%
+        vTwinkle = pow(t01, 1.5) * 0.85 + 0.15;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         gl_PointSize = uSize * (300.0 / -mvPosition.z);
         gl_Position = projectionMatrix * mvPosition;
@@ -104,39 +99,28 @@ export function makeStars(count, radius, sizeRange) {
   return new THREE.Points(geo, mat);
 }
 
-/* 更新星空 uTime（主循环每帧调用）*/
 export function updateStarsTime(deltaReal) {
   if (_starsObj && _starsObj.material.uniforms?.uTime) {
     _starsObj.material.uniforms.uTime.value += deltaReal;
   }
 }
 
-/* 星空 group：每帧跟随相机平移
- * — 星空 attribute 位置是相对 group 原点
- * — 把 group 移到 camera.position → 用户看到的是"无穷远星空"
- * — 海王星视角下背向太阳方向也能看到星星
- */
 let _starsGroup = null;
 export function updateStarPositions(camera) {
   if (!_starsGroup || !camera) return;
   _starsGroup.position.copy(camera.position);
 }
 
-/** 重新生成星空（销毁旧的，按新密度创建）*/
 export function regenerateStars(scene, densityPercent) {
-  // 0-100 → 0-12000 颗（默认 8000）
   const baseCount = 8000;
   const newCount = Math.max(0, Math.round(baseCount * densityPercent / 100));
-  // 销毁旧 stars
   if (_starsObj) {
     if (_starsObj.parent) _starsObj.parent.remove(_starsObj);
     _starsObj.geometry.dispose();
     _starsObj.material.dispose();
     _starsObj = null;
   }
-  if (newCount === 0) return null;  // 0 颗：完全销毁，不创建空对象
-  // 创建新 stars（半径 200，size 1.6 保持跟原来一致）
-  // 加到 _starsGroup（如果还没有 group，先建一个）
+  if (newCount === 0) return null;
   if (!_starsGroup) {
     _starsGroup = new THREE.Group();
     scene.add(_starsGroup);
@@ -146,7 +130,7 @@ export function regenerateStars(scene, densityPercent) {
   return _starsObj;
 }
 
-/** 初始化场景，返回 { scene, camera, renderer, controls, stars, composer, bloomPass } */
+/** 初始化场景，返回 { scene, camera, renderer, controls, stars, composer, bloomPass, setSunMesh, setGodRaysEnabled } */
 export function initScene() {
   const app = document.getElementById('app');
 
@@ -161,21 +145,16 @@ export function initScene() {
   renderer.setSize(innerWidth, innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.3;  // 修 #5: 提亮整体曝光，让太阳更刺眼
+  renderer.toneMappingExposure = 1.3;
   app.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
-  // tycho.ioz 风格：相机可在很近（看太阳细节）和很远（看海王星）之间自由切换
-  // DIST_SCALE=160 后，海王星在 4808 单位远
-  // maxDistance 限制到 8000（≈ 1.66× 海王星距离）— 防止用户拉到无穷远导致辉光/星空被裁剪
-  // minDistance 0.5 — 允许贴近太阳表面看细节
   controls.minDistance = 0.5;
   controls.maxDistance = 8000;
   controls.target.set(0,0,0);
 
-  // 星空 group：放在相机跟随位置，每帧平移
   _starsGroup = new THREE.Group();
   scene.add(_starsGroup);
 
@@ -183,22 +162,65 @@ export function initScene() {
   _starsGroup.add(stars);
   _starsObj = stars;
 
-  /* ===== 后处理：Bloom Pass（仅做"中心微提亮"，光晕主体是 sprite）=====
-   * - threshold 0.85：太阳中心触发 bloom，外圈金黄保留细节
-   * - strength 0.3：仅做中心提亮（外圈光晕由 sprite 负责，避免方形）
-   * - radius 0.4：紧凑
-   * 关闭 bloom 时 strength = 0，等同无后处理，太阳呈现清晰纹理
+  /* ===== 后处理：RenderPass → GodRaysEffect → BloomEffect =====
+   *   - GodRaysEffect：screen-space raymarched，从 sun mesh 中心辐射光线
+   *     pmndrs 社区标准方案（2.8k stars）
+   *   - BloomEffect：太阳中心微提亮（luminanceThreshold 0.92 = 仅最亮处触发）
+   *
+   * 注意：sun mesh 加到 scene（要渲染太阳本体），GodRaysEffect 会在
+   *       渲染时把 sun mesh 当作 lightSource，从它的屏幕坐标辐射光线
+   *
+   * pmndrs EffectComposer 跟 three.js EffectComposer 接口差异：
+   *   - pmndrs 的 composer.render(deltaTime) 需要显式传 deltaTime
+   *   - pmndrs 不需要 OutputPass（自带 tone mapping）
    */
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(innerWidth, innerHeight),
-    0.4,    // strength（中心提亮；中近距离能看到太阳纹理不被 bloom 糊死）
-    0.4,    // radius
-    0.92    // threshold（更高 = 只对最亮的太阳中心触发，不影响纹理细节）
-  );
-  composer.addPass(bloomPass);
-  composer.addPass(new OutputPass());
 
-  return { scene, camera, renderer, controls, stars, composer, bloomPass };
+  let godRaysPass = null;
+  function setSunMesh(sunMesh) {
+    if (godRaysPass) {
+      composer.removePass(godRaysPass);
+      godRaysPass = null;
+    }
+    if (!sunMesh) return;
+    const godRaysEffect = new GodRaysEffect(camera, sunMesh, {
+      height: 480,
+      kernelSize: KernelSize.SMALL,
+      // 调参（避免相机缩放时辉光闪烁 + 降过曝）：
+      density: 0.96,        // 稍降：避免相机距离突变时累积采样误差
+      decay: 0.92,          // 稍降：rays 长度合理（不过长）
+      weight: 0.3,          // 降低：避免过曝淹没太阳本体
+      exposure: 0.45,       // 降低：rays 亮度更克制
+      samples: 80,          // 提高：减少采样台阶（缩放时更平滑）
+      clampMax: 1.0,
+      blendFunction: BlendFunction.SCREEN  // 屏幕叠加（加亮但不爆）
+    });
+    godRaysPass = new EffectPass(camera, godRaysEffect);
+    // pmndrs addPass(pass, index) — index 1 = 插在 RenderPass(0) 之后，Bloom(2) 之前
+    composer.addPass(godRaysPass, 1);
+  }
+
+  // UI toggle 用：控制 godrays pass 开关
+  function setGodRaysEnabled(enabled) {
+    if (godRaysPass) godRaysPass.enabled = !!enabled;
+  }
+
+  // pmndrs BloomEffect — 等价 UnrealBloomPass（intensity 0.4 / threshold 0.92）
+  const bloomEffect = new BloomEffect({
+    intensity: 0.4,
+    luminanceThreshold: 0.92,
+    luminanceSmoothing: 0.025,
+    mipmapBlur: true,
+    radius: 0.4
+  });
+  const bloomPass = new EffectPass(camera, bloomEffect);
+  composer.addPass(bloomPass);
+
+  return {
+    scene, camera, renderer, controls, stars, composer, bloomPass,
+    setSunMesh,
+    setGodRaysEnabled,  // UI toggle 控制 godrays pass
+    get godRaysEnabled() { return !!godRaysPass; }
+  };
 }

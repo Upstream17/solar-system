@@ -81,19 +81,25 @@ export async function makeSun(scene) {
     factEn:SUN_FACTS.factEn };
   scene.add(mesh);
 
-  // 4 层 Sprite 辉光（按相机距离分级显示 + 平滑过渡）
-  // — 替代官方 Lensflare，sizeAttenuation: true 让近处大、远处小
-  // — 永远输出圆形（径向渐变贴图），杜绝 UnrealBloomPass 的方形外圈
-  const glow = makeSunGlow(SUN_R);
-  mesh.add(glow.group);
-  // 暴露元素给 toggle（4 个 Sprite：halo / corona / glow / core）
-  glow.sprites.forEach(s => sunGlowSprites.push(s));
-  // 暴露 update 函数给主循环（每帧根据相机距离调整 opacity/scale/可见性）
-  mesh.userData.glowUpdate = glow.update;
+  // 4 层 Sprite 辉光（halo / corona / glow / aura）— 已废弃
+  // — 原因：GodRaysEffect 接管了"中心辐射"视觉效果
+  // — sprite 4 层叠加看起来是"同心球层"，分界明显
+  // — 而且 baseScale 2.8×SUN_R ≈ 33.6u ≈ 水星轨道 (d=31.2) — 把水星轨道包进去了
+  // — godrays 是 screen-space raymarched，从屏幕中心平滑扩散，没有球层分界
+  // — 保留代码（makeSunGlow 在 lighting.js 里）但不调用，方便以后想用再恢复
+  // const glow = makeSunGlow(SUN_R);
+  // mesh.add(glow.group);
+  // glow.sprites.forEach(s => sunGlowSprites.push(s));
+// mesh.userData.glowUpdate = glow.update;
 
-  addLabel(mesh, '☀ 太阳', 1.5);
-  return mesh;
-}
+  // sun label 单独 add 到 scene，不放进 sun mesh 子节点树
+    // 原因：GodRaysEffect 把 sun mesh 当 lightSource 时，整棵子树都算 lightSource
+    //        如果 label 在子节点里，会被 godrays 当成"光"渲染（label 也会发光）
+    const label = makeTextSprite('☀ 太阳', '#fff5d8');
+    label.position.set(0, 1.5 * SUN_R, 0);
+    scene.add(label);
+    return mesh;
+  }
 
 /* ===== 行星 ===== */
 export async function makePlanet(scene, p) {

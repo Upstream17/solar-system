@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { SUN_R, PLANETS, MOON, SUN_FACTS } from './constants.js';
 import { safeTexture } from './textures.js';
-import { makeSunGlow } from './lighting.js';
+import { makeSunGlow, makeDistantGlow } from './lighting.js';
 import { tick as loaderTick } from './loader.js';
 
 // 进度回调：每个纹理加载完调用一次，让 loader 显示 "X / N"
@@ -147,7 +147,7 @@ export function makePlanetWithLOD(mesh, color, realSize) {
 }
 
 /* ===== 太阳 ===== */
-export async function makeSun(scene) {
+export async function makeSun(scene, camera, renderer) {
   const sunTex = await safeTexture('./src/textures/sun.jpg', 'sun', onLoaderTick);
   // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 12.0）
   const geo = new THREE.SphereGeometry(1.0, 64, 64);
@@ -188,6 +188,17 @@ export async function makeSun(scene) {
     const label = makeTextSprite('☀ 太阳', '#fff5d8');
     label.position.set(0, 1.5 * SUN_R, 0);
     scene.add(label);
+    /* v20260707 v5: 远日轨道占位亮星 (LOD + 屏幕固定 60px via 距离反推)
+     *  - 内行星带 + 火星以内 (D < 4000u) 不渲染
+     *  - 火星→木星 (4000-13000u) 渐入
+     *  - 木星及之外 (D > 13000u) 满显
+     *  - scale 每帧根据 cameraDistance + camera.fov + canvasH 反推
+     *  - 任何距离下屏幕都是 60px, 既不糊屏也不消失
+     */
+    const distantGlow = await makeDistantGlow(SUN_R, camera, renderer);
+        scene.add(distantGlow.sprite);
+        mesh.userData.distantGlow = distantGlow;
+
     return mesh;
   }
 

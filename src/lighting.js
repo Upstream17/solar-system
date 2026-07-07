@@ -41,6 +41,39 @@ function getWhiteGlowTex() {
   return _whiteGlowTex;
 }
 
+/* loadLensFlareTex — 加载用户调好对比度的星芒贴图 (v6.3)
+ *  - 用户用图像编辑工具 (Photoshop/截图工具) 调好:
+ *    - 黑底 (RGB=0, alpha=0) → 完全透明
+ *    - 中心高亮实心圆 + 6 道贯穿星芒 (暖橙色)
+ *  - 直接加载不做任何处理 (Canvas 去色 + 阈值过滤都去掉)
+ *  - SpriteMaterial.color 仍乘 0xfff5d8 暖白染色
+ *  - 缓存到 _lensFlareTex
+ *
+ *  返回: Promise<Texture>
+ */
+let _lensFlareTex = null;
+let _lensFlareLoading = null;
+export function loadLensFlareTex() {
+  if (_lensFlareTex) return Promise.resolve(_lensFlareTex);
+  if (_lensFlareLoading) return _lensFlareLoading;
+  _lensFlareLoading = new Promise((resolve, reject) => {
+    new THREE.TextureLoader().load(
+      './src/textures/lensflare_processed.png',
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        _lensFlareTex = tex;
+        resolve(tex);
+      },
+      undefined,
+      (err) => {
+        _lensFlareLoading = null;
+        reject(err);
+      }
+    );
+  });
+  return _lensFlareLoading;
+}
+
 /* 距离分级阈值（基于 camera.position.length()） */
 const D_CLOSE = 30;    // < 30: 近处
 const D_MID   = 80;    // 30-80: 中距离
@@ -177,4 +210,94 @@ export function initLighting(scene) {
   scene.add(sunLight);
 
   return { sunLight, ambient };
+}
+
+
+/* makeDistantGlow — 远日轨道太阳占位亮星 (v20260707 v5)
+ *
+ * 设计目标: 用户在火星+木星之间及更远轨道时, visual sun (12u) 屏幕投影
+ *           几乎为 0, 需要一个柔和的暖白亮星提示太阳位置.
+ *
+ * 设计选择: LOD + sizeAttenuation:TRUE + 屏幕固定像素 (距离反推 scale)
+ *   - D < 4000u (内行星带 + 火星以内): 不渲染, 保持物理真实 + "空旷感"
+ *   - 4000 < D < 13000u (火星→木星过渡):  smoothstep 渐入 opacity 0 → 0.95
+ *   - D > 13000u (木星及之外):              满显 opacity 0.95
+ *
+ *   为什么 sizeAttenuation:TRUE (不是 false): v3/v4 用 sizeAttenuation:false
+ *   + 写死 scale=60, 结果在木星/土星处 sprite 屏幕大小 ≈ scale * distance /
+ *   focal = 60 * 13312 / 692 = 1154px = 整屏 1.6 倍, 直接糊屏.
+ *
+ *   ★ 正确公式: 屏幕固定 N 像素 = scale 跟 cameraDistance 1:1 联动:
+ *     scale = N * cameraDistance * 2 * tan(fov/2) / canvasH
+ *   - 任何 D 下屏幕都是 N 像素
+ *   - 任何 D 下 sprite 都不糊屏 (因为屏幕固定)
+ *   - 任何 D 下 sprite 都看得见 (因为屏幕固定, 不 saturate)
+ *
+ *   屏幕目标: 60px 暖白圆点 + 柔和外圈, 在所有距离都是同样大小
+ *
+ * 关键 fix: frustumCulled = false
+ *   跟之前 godRaysSource 踩坑同款 — 没 add 到 scene 之前会被错误剔除
+ *
+ * 用法:
+ *   const dg = makeDistantGlow(SUN_R, camera, renderer);
+ *   scene.add(dg.sprite);
+ *   // 每帧调:
+ *   dg.update(camera.position.length());
+ */
+export async function makeDistantGlow(sunR, camera, renderer) {
+  // v6: 用项目里 lensflare0_alpha.png 真实摄影贴图 (代替程序化径向渐变)
+  //   - TextureLoader 异步, 必须 await
+  //   - 去色 + 暖白染色由 loadLensFlareTex 完成
+  //   - 加载失败兜底: 回退到 getWhiteGlowTex (程序化径向)
+  let tex;
+  try {
+    tex = await loadLensFlareTex();
+  } catch (e) {
+    console.warn('distantGlow: lens flare tex load failed, fallback to procedural:', e);
+    tex = getWhiteGlowTex();
+  }
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    color: 0xffe890,                // 更黄更亮染色 (暖黄)
+    transparent: true,
+    blending: THREE.NormalBlending, // alpha 覆盖, 不累积
+    depthWrite: false,
+    depthTest: false,               // ★ v5 fix: 跟 sun mesh 重合, depthTest=true 时被 sun 自己 depth 挡住
+    sizeAttenuation: true,          // ★ v5 关键: 用 sizeAttenuation 透视
+    opacity: 0,
+    toneMapped: false
+  });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.setScalar(60);           // 占位, update 里每帧重算
+  sp.frustumCulled = false;         // 防剔除坑
+  sp.renderOrder = 9999;            // ★ 永远渲染在最前
+  sp.position.set(0, 0, 0);
+
+  // 屏幕目标尺寸 (像素)
+  const TARGET_PX = 48;            // 略大, 更醒目
+  // 缓存 canvasH (浏览器窗口大小变化时 update 重新读)
+  function computeScale(cameraDistance) {
+    const canvasH = renderer.domElement.height;
+    const fovRad = camera.fov * Math.PI / 180;
+    // 屏幕固定 N 像素所需的世界单位 scale:
+    //   scale = N * distance * 2 * tan(fov/2) / canvasH
+    return TARGET_PX * cameraDistance * 2 * Math.tan(fovRad / 2) / canvasH;
+  }
+
+  function update(cameraDistance) {
+    // LOD 阈值
+    const FADE_START = 4000;
+    const FADE_END   = 13000;
+    const t = THREE.MathUtils.smoothstep(cameraDistance, FADE_START, FADE_END);
+
+    if (t <= 0.001) {
+      sp.visible = false;
+      return;
+    }
+    sp.visible = true;
+    sp.material.opacity = 1.0 * t;  // 满显更亮
+    sp.scale.setScalar(computeScale(cameraDistance));
+  }
+
+  return { sprite: sp, update };
 }

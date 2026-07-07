@@ -38,7 +38,7 @@ async function init() {
     window.__sunLight = sunLight;
 
     // 3. 太阳（辉光 Sprite 内部生成）
-    const sun = await makeSun(scene);
+    const sun = await makeSun(scene, camera, renderer);
     window.__sun = sun;
     // 3.1 把 sun mesh 注入 GodRaysEffect（后处理链）
     // — GodRaysEffect 需要 sun mesh 作为 lightSource，从 sun 屏幕坐标辐射光线
@@ -207,6 +207,12 @@ async function init() {
       if (sun && sun.userData.glowUpdate) {
         const camDist = camera.position.length();
         sun.userData.glowUpdate(camDist, sun);
+      }
+
+      // v20260707 v4: 远日轨道占位亮星 LOD (火星-木星之间开始渲染)
+      if (sun && sun.userData.distantGlow) {
+        const camDist = camera.position.length();
+        sun.userData.distantGlow.update(camDist);
       }
 
       // 相机动画 + 追踪

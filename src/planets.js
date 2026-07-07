@@ -147,70 +147,6 @@ export function makePlanetWithLOD(mesh, color, realSize) {
 }
 
 /* ===== 太阳 ===== */
-// 远档太阳 sprite: 暖白圆点 + 中心柔光
-// 跟行星 dot 不同: 太阳 dot 用 2 层 sprite (中心亮核 + 外层柔光晕)
-// 模拟真实"远观太阳" = 明亮小亮点 + 短柔光
-function makeSunDot() {
-  // 中心亮核: 暖白圆形 (亮黄白色)
-  const size = 64;
-  const coreC = document.createElement('canvas');
-  coreC.width = coreC.height = size;
-  const coreCtx = coreC.getContext('2d');
-  const coreGrad = coreCtx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-  coreGrad.addColorStop(0.0, 'rgba(255,255,240,1.0)');    // 中心极亮
-  coreGrad.addColorStop(0.3, 'rgba(255,245,200,0.9)');   // 暖白
-  coreGrad.addColorStop(0.7, 'rgba(255,200,120,0.3)');   // 暖橙外缘
-  coreGrad.addColorStop(1.0, 'rgba(255,150,80,0)');       // 渐变透明
-  coreCtx.fillStyle = coreGrad;
-  coreCtx.fillRect(0, 0, size, size);
-  const coreTex = new THREE.CanvasTexture(coreC);
-  coreTex.colorSpace = THREE.SRGBColorSpace;
-
-  // 外层柔光晕: 更大更暗
-  const haloSize = 128;
-  const haloC = document.createElement('canvas');
-  haloC.width = haloC.height = haloSize;
-  const haloCtx = haloC.getContext('2d');
-  const haloGrad = haloCtx.createRadialGradient(haloSize/2, haloSize/2, 0, haloSize/2, haloSize/2, haloSize/2);
-  haloGrad.addColorStop(0.0, 'rgba(255,220,150,0.5)');
-  haloGrad.addColorStop(0.3, 'rgba(255,200,130,0.2)');
-  haloGrad.addColorStop(0.7, 'rgba(255,150,100,0.05)');
-  haloGrad.addColorStop(1.0, 'rgba(255,120,80,0)');
-  haloCtx.fillStyle = haloGrad;
-  haloCtx.fillRect(0, 0, haloSize, haloSize);
-  const haloTex = new THREE.CanvasTexture(haloC);
-  haloTex.colorSpace = THREE.SRGBColorSpace;
-
-  // 创建 sprite group (亮核 + 外晕)
-  const group = new THREE.Group();
-
-  const coreMat = new THREE.SpriteMaterial({
-    map: coreTex,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false
-  });
-  const coreSprite = new THREE.Sprite(coreMat);
-  coreSprite.scale.set(0.1, 0.1, 1);
-  coreSprite.userData.isSunCore = true;
-  group.add(coreSprite);
-
-  const haloMat = new THREE.SpriteMaterial({
-    map: haloTex,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false
-  });
-  const haloSprite = new THREE.Sprite(haloMat);
-  haloSprite.scale.set(0.2, 0.2, 1);
-  haloSprite.userData.isSunHalo = true;
-  group.add(haloSprite);
-
-  return group;
-}
-
 export async function makeSun(scene) {
   const sunTex = await safeTexture('./src/textures/sun.jpg', 'sun', onLoaderTick);
   // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 12.0）
@@ -233,17 +169,7 @@ export async function makeSun(scene) {
               temp:'Surface 5,500 °C · Core 15 million °C', gravity:'274 m/s²', luminosity:'3.83×10²⁶ W' },
     factZh:SUN_FACTS.factZh,
     factEn:SUN_FACTS.factEn };
-
-  // v20260707 v3: 用 LOD 包装 — 远距离切到 sun dot sprite (2 层 sprite: 中心亮核 + 外晕)
-  //   阈值 = SUN_R * 384 = 4608 (跟行星 LOD 算法一致: 视觉 2px 距离)
-  //   默认相机 3354 距太阳 < 4608 → 近档 mesh + godrays
-  //   用户拉远到 > 4608 (例如在海王星附近) → 远档 sun dot + 关 godrays
-  const sunLod = new THREE.LOD();
-  sunLod.addLevel(makeSunDot(), SUN_R * 384);  // 远档
-  sunLod.addLevel(mesh, 0);                     // 近档
-  sunLod.userData = mesh.userData;
-  sunLod.userData.isSunLOD = true;
-  scene.add(sunLod);
+  scene.add(mesh);
 
   // 4 层 Sprite 辉光（halo / corona / glow / aura）— 已废弃
   // — 原因：GodRaysEffect 接管了"中心辐射"视觉效果
@@ -262,7 +188,7 @@ export async function makeSun(scene) {
     const label = makeTextSprite('☀ 太阳', '#fff5d8');
     label.position.set(0, 1.5 * SUN_R, 0);
     scene.add(label);
-    return sunLod;
+    return mesh;
   }
 
 /* ===== 行星 ===== */

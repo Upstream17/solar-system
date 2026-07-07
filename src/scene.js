@@ -186,23 +186,20 @@ export function initScene() {
       godRaysPass = null;
     }
     if (!sunMesh) return;
-    // v20260707 v3: sunMesh 可能是 LOD 节点
-    //   GodRaysEffect 需要 lightSource.material 来采样太阳纹理
-    //   LOD 节点没 material，从 levels[0].object (mesh) 取
-    //   同时 GodRaysEffect 用 lightSource.getWorldPosition() 定位太阳
-    //   LOD 节点是 Object3D 子类, getWorldPosition 正常工作
-    const lightSource = sunMesh.isMesh ? sunMesh : (sunMesh.levels ? sunMesh.levels[0].object : sunMesh);
-    const godRaysEffect = new GodRaysEffect(camera, lightSource, {
+    const godRaysEffect = new GodRaysEffect(camera, sunMesh, {
       height: 480,
       kernelSize: KernelSize.SMALL,
-      // 调参（避免相机缩放时辉光闪烁 + 降过曝）：
-      density: 0.96,        // 稍降：避免相机距离突变时累积采样误差
-      decay: 0.92,          // 稍降：rays 长度合理（不过长）
-      weight: 0.3,          // 降低：避免过曝淹没太阳本体
-      exposure: 0.45,       // 降低：rays 亮度更克制
-      samples: 80,          // 提高：减少采样台阶（缩放时更平滑）
+      // v20260707 v4: 保持 c317f17 调参 (近/远都 sun mesh + godrays)
+      //   太阳 LOD 已删除, 不会出现"图 1 vs 图 2"跳变
+      //   旧: density 0.96 + decay 0.92 + weight 0.3 + exposure 0.45
+      //   略调: density 0.94 + decay 0.88 (远观略收敛)
+      density: 0.94,
+      decay: 0.88,
+      weight: 0.30,
+      exposure: 0.40,
+      samples: 80,
       clampMax: 1.0,
-      blendFunction: BlendFunction.SCREEN  // 屏幕叠加（加亮但不爆）
+      blendFunction: BlendFunction.SCREEN
     });
     godRaysPass = new EffectPass(camera, godRaysEffect);
     // pmndrs addPass(pass, index) — index 1 = 插在 RenderPass(0) 之后，Bloom(2) 之前

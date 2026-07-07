@@ -39,10 +39,10 @@ async function init() {
 
     // 3. 太阳（辉光 Sprite 内部生成）
     const sun = await makeSun(scene);
-    window.__sun = sun;  // sun 是 LOD 节点 (近档 mesh, 远档 sun dot group)
-    // 3.1 把 sun LOD 注入 GodRaysEffect（后处理链）
-    // — GodRaysEffect 需要 lightSource mesh，从 LOD 内部取近档 mesh
-    setSunMesh(sun.levels ? sun.levels[0].object : sun);
+    window.__sun = sun;
+    // 3.1 把 sun mesh 注入 GodRaysEffect（后处理链）
+    // — GodRaysEffect 需要 sun mesh 作为 lightSource，从 sun 屏幕坐标辐射光线
+    setSunMesh(sun);
 
     // 4. 行星
     const planetObjs = [];
@@ -180,36 +180,6 @@ async function init() {
               }
             });
           });
-          // 太阳 LOD update + godrays 同步 + sun dot sprite 屏幕尺寸
-          if (window.__sun && window.__sun.levels) {
-            const sunLod = window.__sun;
-            const prevLvl = sunLod.userData._lastLvl;
-            sunLod.update(camera);
-            const curLvl = sunLod.getCurrentLevel();
-            // LOD 切档时联动 godrays
-            //   近档 (lvl 0): mesh + godrays 开
-            //   远档 (lvl 1): sun dot + godrays 关
-            if (prevLvl !== curLvl) {
-              if (window.__setGodRaysEnabled) {
-                window.__setGodRaysEnabled(curLvl === 0);
-              }
-              sunLod.userData._lastLvl = curLvl;
-            }
-            // 远档时给 sun dot group 里的 sprite 算屏幕尺寸
-            if (curLvl >= 1) {
-              sunLod.getWorldPosition(_v);
-              const camDist = camera.position.distanceTo(_v);
-              // 亮核 6px + 外晕 12px (远观太阳是"小亮点 + 短柔光")
-              const sCore = 6 * camDist * _halfWorldPerPx;
-              const sHalo = 12 * camDist * _halfWorldPerPx;
-              // 遍历 sun dot group (LOD 远档) 的 children (core + halo sprites)
-              const sunDotGroup = sunLod.levels[1].object;
-              sunDotGroup.children.forEach(child => {
-                if (child.userData.isSunCore) child.scale.set(sCore, sCore, 1);
-                else if (child.userData.isSunHalo) child.scale.set(sHalo, sHalo, 1);
-              });
-            }
-          }
         }
       }
 

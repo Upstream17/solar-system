@@ -10,6 +10,19 @@ import { tick as loaderTick } from './loader.js';
 const onLoaderTick = (label) => loaderTick(label);
 
 /* 文字标签（Canvas 渲染 → Sprite） */
+// v20260707: 改用 MeshBasicMaterial + PlaneGeometry 替代 Sprite
+// 原因: pmndrs EffectComposer 不渲染 Sprite (实测不显示)
+// - MeshBasicMaterial 不受光照影响, 红色/绿色等纯色正常显示
+// - PlaneGeometry 渲染 quad, 加 CanvasTexture 当文字贴图
+// - tick 里手动设 mesh.quaternion = camera.quaternion 做 billboard
+/* 文字标签（Canvas 渲染 → Sprite）
+ * v20260707: 改用 MeshBasicMaterial 替代 Sprite (pmndrs EffectComposer 不渲染 Sprite)
+ *             — tick 里按相机距离算屏幕像素尺寸 (8~24px) + billboard
+ *             — 但 Mesh + CanvasTexture 在 pmndrs composer 下也不显示 (实际验证)
+ *             — 暂时回滚到基线 SpriteMaterial, 但 scale 改小到 1.5×0.375
+ *               避免基线 6×1.5 太大盖住行星的问题
+ *             — TODO: 调研 pmndrs composer CanvasTexture 渲染兼容问题
+ */
 function makeTextSprite(text, color='#9bd0ff') {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 64;
@@ -25,15 +38,17 @@ function makeTextSprite(text, color='#9bd0ff') {
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.SpriteMaterial({ map:tex, transparent:true, depthTest:false });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(6, 1.5, 1);
+  // v20260707: 基线 6×1.5 → 1.5×0.375 (缩小 4×), 拉近时不至于完全盖住行星
+  sprite.scale.set(1.5, 0.375, 1);
   sprite.userData.isLabel = true;
   return sprite;
 }
 
-function addLabel(parent, text, yOffset) {
+function addLabel(parent, text, yOffset, sceneRef) {
   const s = makeTextSprite(text);
   s.position.set(0, yOffset || 2, 0);
   parent.add(s);
+  return s;
 }
 
 /* 轨道线（圆环） */

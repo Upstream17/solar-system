@@ -15,7 +15,11 @@
 export const AU = 1;  // 单位基准（不再乘 14，所有距离按 AU 直接算）
 
 // ===== NASA 标准距离缩放 =====
-export const DIST_SCALE = 160;
+// v20260707: 真实化轨道（×16），水星从 5.2 太阳直径远 → 真实 83 太阳直径远
+//   - DIST_SCALE 160 → 2560
+//   - 海王星在 76928 世界单位；要求 camera.far >= 200000, OrbitControls.maxDistance >= 100000
+//   - 配合 planets.js 的 THREE.LOD 远距离小点方案
+export const DIST_SCALE = 2560;
 
 // ===== 太阳半径 =====
 export const SUN_R = 12.0;

@@ -76,10 +76,10 @@ export function scaleScene(scene, camera, controls) {
 
   regenerateOrbits(scene);
 
-  // 相机默认位置（tycho.ioz 风格：视野内能看到金星-火星）
-  // DIST_SCALE 翻倍后同步：相机放在 (0, 100, 300) 距离 ≈ 316 单位
-  // 太阳半径 12.0，FOV 55° 下占视野 ≈ 2×atan(12/316) ≈ 4.4° ≈ 视野 8%
-  // 海王星在 4808 单位远处，需要相机 ~6000 才能看到完整太阳系（用户滚轮拉远）
-  camera.position.set(0, 100, 300);
+  // v20260707: DIST_SCALE×16 后相机同步拉远
+  // 相机距离太阳 ≈ sqrt(1500² + 3000²) ≈ 3354 单位
+  // 太阳半径 12.0，FOV 55° 下占视野 ≈ 2×atan(12/3354) ≈ 0.41° ≈ 视野 0.7%
+  // 跟 NASA 真实望远镜视角（0.5°）一致 → 太阳"远而小"才是真实太空感
+  camera.position.set(0, 1500, 3000);
   controls.target.set(0, 0, 0);
 }

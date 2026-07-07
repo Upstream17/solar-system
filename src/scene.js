@@ -137,8 +137,9 @@ export function initScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000007);
 
-  const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 5000);
-  camera.position.set(0, 50, 90);
+  // v20260707: DIST_SCALE×16 后海王星在 76928 单位 → camera.far 必须够大才能看见
+  const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 200000);
+  camera.position.set(0, 1500, 3000);
 
   const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -152,7 +153,8 @@ export function initScene() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
   controls.minDistance = 0.5;
-  controls.maxDistance = 8000;
+  controls.maxDistance = 200000;  // v20260707: 跟随 camera.far 放大，允许滚到海王星
+  controls.zoomSpeed = 2.0;       // v20260707: 距离量级变大后加快缩放（默认 1.0 偏慢）
   controls.target.set(0,0,0);
 
   _starsGroup = new THREE.Group();

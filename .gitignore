@@ -21,6 +21,9 @@ build/
 *.log
 npm-debug.log*
 
+# 旧项目 idea 备忘 (项目已有完整文档 PROJECT.md / README.md)
+IDEA.md
+
 # Hermes / Agent scratch（不该污染项目）
 .hermes-scratch/
 

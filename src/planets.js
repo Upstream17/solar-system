@@ -117,24 +117,100 @@ function makePlanetDot(color) {
  * - 远档: makePlanetDot 屏幕 24px 小点 (适合远距离观察)
  * 阈值: 距行星 > 500 单位用远档
  */
-export function makePlanetWithLOD(mesh, color) {
+export function makePlanetWithLOD(mesh, color, realSize) {
   // LOD 节点
-  // 阈值: 距相机超过阈值时 mesh 视觉直径 < 4px (亚像素) → 切远档 dot
-  //   200 = canvasH(800) / (2*tan(fov/2)=1.04) / 4 = 视觉 4px 距离
-  //   - 默认相机 3354 距太阳, 内行星距 998-3891 全部 > 200 → 远档 dot
-  //   - 用户拉近到 200 单位 → mesh 视觉直径 > 4px → 切近档 (可看贴图)
-  //   - 用户贴脸到 32 单位 → mesh 视觉直径 > 24px (清晰)
+  // 阈值含义: addLevel(distance) 的 distance 是"相机到这个 LOD 节点世界坐标"的距离（世界单位）
+  //   - 距 < threshold → 显示第一个 addLevel 的对象 (近档 mesh)
+  //   - 距 > threshold → 显示后一个 addLevel 的对象 (远档 sprite dot)
+  //
+  // 阈值设计: 视觉直径 = 2px 时切换 (近档仍可辨识)
+  //   视觉 px = realSize / distance * (canvasH / 2 / tan(fov/2))
+  //   2px 距离 = realSize * 800 / (2*0.521) / 2 = realSize * 384
+  //
+  // 案例 (默认相机 3354 距太阳):
+  //   水星 0.383 → 阈值 147  (默认相机 2500 远 → 远档)
+  //   地球 1.0   → 阈值 384  (默认相机 1883 远 → 远档)
+  //   木星 11.2  → 阈值 4300 (默认相机 13243 远 → 远档)
+  //   → 默认相机下 8 颗行星全远档
+  //   → 拉近到地球 384 单位内 → 看到地球贴图
+  //   → 拉近到水星 147 单位内 → 看到水星贴图
+  //   → 拉近到木星 4300 单位内 → 看到木星贴图
   const lod = new THREE.LOD();
-  // 远档: 小点 (距行星 > 200 单位用小点) — 200 = 地球 mesh 视觉 4px 距离
-  lod.addLevel(makePlanetDot(color), 200);
+  // 阈值 = 视觉 2px 距离
+  const threshold = realSize * 384;
+  // 远档: 屏幕 4px sprite dot (之前 24px 太大, 看起来比太阳还大)
+  lod.addLevel(makePlanetDot(color), threshold);
   // 近档: 原 mesh
   lod.addLevel(mesh, 0);
-  // 标记: tick 里需要更新
   lod.userData.isPlanetLOD = true;
   return lod;
 }
 
 /* ===== 太阳 ===== */
+// 远档太阳 sprite: 暖白圆点 + 中心柔光
+// 跟行星 dot 不同: 太阳 dot 用 2 层 sprite (中心亮核 + 外层柔光晕)
+// 模拟真实"远观太阳" = 明亮小亮点 + 短柔光
+function makeSunDot() {
+  // 中心亮核: 暖白圆形 (亮黄白色)
+  const size = 64;
+  const coreC = document.createElement('canvas');
+  coreC.width = coreC.height = size;
+  const coreCtx = coreC.getContext('2d');
+  const coreGrad = coreCtx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  coreGrad.addColorStop(0.0, 'rgba(255,255,240,1.0)');    // 中心极亮
+  coreGrad.addColorStop(0.3, 'rgba(255,245,200,0.9)');   // 暖白
+  coreGrad.addColorStop(0.7, 'rgba(255,200,120,0.3)');   // 暖橙外缘
+  coreGrad.addColorStop(1.0, 'rgba(255,150,80,0)');       // 渐变透明
+  coreCtx.fillStyle = coreGrad;
+  coreCtx.fillRect(0, 0, size, size);
+  const coreTex = new THREE.CanvasTexture(coreC);
+  coreTex.colorSpace = THREE.SRGBColorSpace;
+
+  // 外层柔光晕: 更大更暗
+  const haloSize = 128;
+  const haloC = document.createElement('canvas');
+  haloC.width = haloC.height = haloSize;
+  const haloCtx = haloC.getContext('2d');
+  const haloGrad = haloCtx.createRadialGradient(haloSize/2, haloSize/2, 0, haloSize/2, haloSize/2, haloSize/2);
+  haloGrad.addColorStop(0.0, 'rgba(255,220,150,0.5)');
+  haloGrad.addColorStop(0.3, 'rgba(255,200,130,0.2)');
+  haloGrad.addColorStop(0.7, 'rgba(255,150,100,0.05)');
+  haloGrad.addColorStop(1.0, 'rgba(255,120,80,0)');
+  haloCtx.fillStyle = haloGrad;
+  haloCtx.fillRect(0, 0, haloSize, haloSize);
+  const haloTex = new THREE.CanvasTexture(haloC);
+  haloTex.colorSpace = THREE.SRGBColorSpace;
+
+  // 创建 sprite group (亮核 + 外晕)
+  const group = new THREE.Group();
+
+  const coreMat = new THREE.SpriteMaterial({
+    map: coreTex,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false
+  });
+  const coreSprite = new THREE.Sprite(coreMat);
+  coreSprite.scale.set(0.1, 0.1, 1);
+  coreSprite.userData.isSunCore = true;
+  group.add(coreSprite);
+
+  const haloMat = new THREE.SpriteMaterial({
+    map: haloTex,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false
+  });
+  const haloSprite = new THREE.Sprite(haloMat);
+  haloSprite.scale.set(0.2, 0.2, 1);
+  haloSprite.userData.isSunHalo = true;
+  group.add(haloSprite);
+
+  return group;
+}
+
 export async function makeSun(scene) {
   const sunTex = await safeTexture('./src/textures/sun.jpg', 'sun', onLoaderTick);
   // 几何尺寸固定为 1.0（基准单位），scale 调整显示（scale = SUN_R = 12.0）
@@ -157,7 +233,17 @@ export async function makeSun(scene) {
               temp:'Surface 5,500 °C · Core 15 million °C', gravity:'274 m/s²', luminosity:'3.83×10²⁶ W' },
     factZh:SUN_FACTS.factZh,
     factEn:SUN_FACTS.factEn };
-  scene.add(mesh);
+
+  // v20260707 v3: 用 LOD 包装 — 远距离切到 sun dot sprite (2 层 sprite: 中心亮核 + 外晕)
+  //   阈值 = SUN_R * 384 = 4608 (跟行星 LOD 算法一致: 视觉 2px 距离)
+  //   默认相机 3354 距太阳 < 4608 → 近档 mesh + godrays
+  //   用户拉远到 > 4608 (例如在海王星附近) → 远档 sun dot + 关 godrays
+  const sunLod = new THREE.LOD();
+  sunLod.addLevel(makeSunDot(), SUN_R * 384);  // 远档
+  sunLod.addLevel(mesh, 0);                     // 近档
+  sunLod.userData = mesh.userData;
+  sunLod.userData.isSunLOD = true;
+  scene.add(sunLod);
 
   // 4 层 Sprite 辉光（halo / corona / glow / aura）— 已废弃
   // — 原因：GodRaysEffect 接管了"中心辐射"视觉效果
@@ -176,7 +262,7 @@ export async function makeSun(scene) {
     const label = makeTextSprite('☀ 太阳', '#fff5d8');
     label.position.set(0, 1.5 * SUN_R, 0);
     scene.add(label);
-    return mesh;
+    return sunLod;
   }
 
 /* ===== 行星 ===== */
@@ -202,7 +288,7 @@ export async function makePlanet(scene, p) {
   // v20260707: 用 LOD 包装 mesh — 远距离 (>500) 自动切到屏幕 24px sprite 小点
   // 近档: mesh (带 ring/clouds/label 子节点) — 适合近距离观察
   // 远档: sprite 小点 — 远距离也能看到行星位置
-  const lod = makePlanetWithLOD(mesh, p.color);
+  const lod = makePlanetWithLOD(mesh, p.color, p.realSize);
   // LOD 中心 = mesh 中心 = 行星位置, lod.update(camera) 自动按距 mesh 距离切档
   lod.userData = mesh.userData;
   lod.userData.isPlanetLOD = true;

@@ -186,7 +186,13 @@ export function initScene() {
       godRaysPass = null;
     }
     if (!sunMesh) return;
-    const godRaysEffect = new GodRaysEffect(camera, sunMesh, {
+    // v20260707 v3: sunMesh 可能是 LOD 节点
+    //   GodRaysEffect 需要 lightSource.material 来采样太阳纹理
+    //   LOD 节点没 material，从 levels[0].object (mesh) 取
+    //   同时 GodRaysEffect 用 lightSource.getWorldPosition() 定位太阳
+    //   LOD 节点是 Object3D 子类, getWorldPosition 正常工作
+    const lightSource = sunMesh.isMesh ? sunMesh : (sunMesh.levels ? sunMesh.levels[0].object : sunMesh);
+    const godRaysEffect = new GodRaysEffect(camera, lightSource, {
       height: 480,
       kernelSize: KernelSize.SMALL,
       // 调参（避免相机缩放时辉光闪烁 + 降过曝）：

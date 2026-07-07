@@ -2,16 +2,18 @@
 
 > **给 AI 助手读的项目索引** — 跨会话续接时，先读这个文件就能掌握当前开发现状，不用重新探索。
 >
-> **最后更新**：2026-07-06
-> **基线 commit**：`待提交 — GodRaysEffect 辉光方案`（46fd802 的 sprite 方案已被 godrays 完全替代）
+> **最后更新**：2026-07-07
+> **基线 commit**：`b1c4a83`（轨道真实化 + LOD 三件套 + 太阳收敛调参）
 
 ---
 
 ## 0. 一句话总览
 
-**纯前端 Three.js 太阳系 3D 模拟器**，8 大行星 + 月球真实比例轨道，**零构建**（无 package.json / 无 node_modules），用 `<script type="importmap">` + unpkg CDN 引入依赖，部署在 **Cloudflare Pages**（`https://solarsystem.upstream.eu.cc/`）。
+**纯前端 Three.js r160 太阳系 3D 模拟器**，8 大行星 + 月球，**真实 AU 比例轨道**（DIST_SCALE ×16），**零构建**（无 package.json / 无 node_modules），用 `<script type="importmap">` + unpkg CDN 引入依赖，部署在 **Cloudflare Pages**（`https://solarsystem.upstream.eu.cc/`）。
 
-**太阳辉光方案**：`pmndrs/postprocessing` 的 `GodRaysEffect`（screen-space raymarched，社区 2.8k stars 标准方案）。替换了之前的 4 层 sprite 方案，效果更真实、零构建门槛不增加。
+**LOD 系统**：每行星动态阈值 `realSize × 384`（视觉 2px 距离）；远档用 4px sprite dot；近档用原 mesh（带贴图 + 环 + 云层 + label）。**太阳永远 mesh + godrays**（删了 sun LOD 二档切档，避免 sprite 视觉跳变）。
+
+**太阳辉光**：`pmndrs/postprocessing` 的 `GodRaysEffect`（screen-space raymarched，从 sun mesh 屏幕坐标辐射光线）+ `BloomEffect`（中心提亮 luminanceThreshold 0.92）。
 
 ---
 
@@ -20,10 +22,10 @@
 | 类别 | 选型 | 备注 |
 |---|---|---|
 | 渲染 | **Three.js r160** | unpkg CDN：`https://unpkg.com/three@0.160.0/build/three.module.js` |
-| 后处理 | pmndrs/postprocessing 6.36.4 + three.js 后处理混用 | `EffectComposer` / `RenderPass` / `EffectPass` 用 pmndrs；不再用 three.js 内置 `UnrealBloomPass` |
-| 太阳辉光 | `GodRaysEffect`（screen-space raymarched） | 关键 effect，从 sun mesh 中心向四周辐射 |
+| 后处理 | pmndrs/postprocessing 6.36.4 + three.js 后处理混用 | `EffectComposer` / `RenderPass` / `EffectPass` 用 pmndrs |
+| 太阳辉光 | `GodRaysEffect`（screen-space raymarched） | 从 sun mesh 屏幕坐标辐射光线 |
 | 中心提亮 | `BloomEffect`（pmndrs，等价 UnrealBloomPass） | `intensity 0.4` + `luminanceThreshold 0.92` |
-| 控件 | OrbitControls | camera 拖拽/缩放/旋转 |
+| 控件 | OrbitControls | camera 拖拽/缩放/旋转；`maxDistance 200000` |
 | 依赖管理 | importmap + unpkg CDN | **零 npm install** |
 | 构建 | **无** | index.html + src/*.js 直接上传 |
 | i18n | 自写 dict（zh-CN / en）| i18n.js |
@@ -56,13 +58,14 @@ solar-system/
 ├── sitemap.xml              # SEO
 ├── README.md / README.zh-CN.md / README.en.md   # 用户文档
 ├── PROJECT.md               # 本文件（项目索引，AI 上下文）
+├── AGENTS.md                # 给 AI 助手的快速上下文入口
 │
 ├── src/
 │   ├── main.js              # 入口 — async init() 串联所有模块
 │   ├── scene.js             # scene + camera + renderer + OrbitControls + 星空 + 后处理 pipeline（GodRays + Bloom）
-│   ├── lighting.js          # 光照 + 太阳辉光 makeSunGlow（保留但不再调用，详见 §3）
-│   ├── planets.js           # makeSun / makePlanet / makeMoon / makeOrbit
-│   ├── constants.js         # NASA 数据（PLANETS、MOON、SUN_FACTS、DIST_SCALE=160、SUN_R=12）
+│   ├── lighting.js          # 光照（sunLight PointLight, decay=0 模拟平行光 + ambient）
+│   ├── planets.js           # makeSun / makePlanet (含 LOD) / makeMoon / makeOrbit / makeTextSprite / makePlanetDot
+│   ├── constants.js         # NASA 数据（PLANETS、MOON、SUN_FACTS、DIST_SCALE=2560、SUN_R=12）
 │   ├── scale.js             # 距离/半径缩放工具
 │   ├── textures.js          # safeTexture 加载器
 │   ├── ui.js                # 全部 UI（slider / toggle / info panel / legend / tracking stop）
@@ -100,24 +103,23 @@ solar-system/
 - `async init()`：
   1. `initScene()` → scene/camera/renderer/controls/stars/composer/bloomPass + setSunMesh + setGodRaysEnabled
   2. `initLighting()` → sunLight（PointLight, decay=0 模拟平行光）+ ambient
-  3. `makeSun(scene)` → 太阳本体（MeshBasicMaterial 暖白 G2V 颜色）
-  4. `makeSun(scene).then(setSunMesh)` → 把 sun mesh 注入 GodRaysEffect
-  5. 循环 `makePlanet(scene, p)` → 8 大行星
-  6. `makeMoon()` → 月球，挂到地球 pivot
-  7. ~~`scene.add(makeOrbit(SUN_R * 1.05))` 太阳赤道环~~ — **已删除**（看起来像"幽灵轨道"，跟水星轨道距离过近）
-  8. `scaleScene()` → 应用 DIST_SCALE 缩放
-  9. `initI18n()` 必须在所有 UI 之前
-  10. UI 初始化（sliders / toggles / info / tracking / collapse）
-  11. 点击交互
-  12. 图例、浮动工具按钮
-  13. resize 监听
-  14. **主循环** `tick()`：
+  3. `makeSun(scene)` → 太阳 mesh, add 到 scene, setSunMesh 注入 GodRays
+  4. 循环 `makePlanet(scene, p)` → 8 大行星（带 LOD）
+  5. `makeMoon()` → 月球，挂到地球 pivot
+  6. `scaleScene()` → 应用 DIST_SCALE 缩放
+  7. `initI18n()` 必须在所有 UI 之前
+  8. UI 初始化（sliders / toggles / info / tracking / collapse）
+  9. 点击交互
+  10. 图例、浮动工具按钮
+  11. resize 监听
+  12. **主循环** `tick()`：
       - deltaReal（相机动画、星空旋转）/ deltaSim（受 speedFactor 影响）
       - 行星公转 + 自转 + 地球云层反向旋转
       - 月球轨道
       - 太阳自转
       - 星空 uTime + 位置跟随相机
-      - ~~`sun.userData.glowUpdate()` — 4 层 sprite 距离驱动~~ — **已停用**（godrays 接管）
+      - **label 屏幕像素尺寸动态 clamp**（8~24px，4:1 文字比例）
+      - **LOD update** + 远档 dot 屏幕 4px scale
       - 相机动画 + 追踪
       - `composer.render(deltaReal)` — pmndrs composer 需要传 deltaTime
 
@@ -126,82 +128,63 @@ solar-system/
 - `makeStars(count, radius, sizeRange)` — ShaderMaterial 实现闪烁
 - `_starsGroup` 每帧跟随相机平移
 - `regenerateStars(scene, densityPercent)` — 销毁旧 stars + 重建
-- `initScene()` 返回：
-  - scene / camera / renderer / controls / stars
-  - composer（**pmndrs 的 EffectComposer**，不是 three.js 的）
-  - bloomPass（pmndrs BloomEffect 包装的 EffectPass）
-  - `setSunMesh(sunMesh)` — main.js 在 makeSun 后调用，把 sun mesh 绑给 GodRaysEffect
-  - `setGodRaysEnabled(bool)` — UI SUN GLOW toggle 调用，控制 GodRaysEffect pass 开关
+- `initScene()` 返回：scene / camera (far=200000) / renderer / controls / stars / composer (pmndrs) / bloomPass / setSunMesh / setGodRaysEnabled
 - **后处理 pipeline 顺序**：
   ```
-  RenderPass(scene, camera)        → 渲染场景到 buffer
-    → GodRaysEffect(EffectPass)     → 从 sun mesh 屏幕坐标辐射光线
-    → BloomEffect(EffectPass)       → 中心提亮（luminanceThreshold 0.92）
-    → (OutputPass 不需要，pmndrs 自动 tone mapping)
+  RenderPass(scene, camera)
+    → GodRaysEffect(EffectPass)  ← 从 sun mesh 屏幕坐标辐射光线
+    → BloomEffect(EffectPass)    ← 中心提亮（luminanceThreshold 0.92）
   ```
-- **GodRaysEffect 关键参数**（调优后）：
+- **GodRaysEffect 调参（v4 收敛版）**：
   ```js
   {
     height: 480,
     kernelSize: KernelSize.SMALL,
-    density: 0.96,       // 接近 1：rays 密而连续（避免相机突变时采样闪烁）
-    decay: 0.92,         // rays 长度合理
-    weight: 0.3,         // 避免过曝
-    exposure: 0.45,      // rays 亮度克制
-    samples: 80,         // 采样数（缩放时更平滑）
+    density: 0.94,       // 略降: 减少累积采样误差
+    decay: 0.88,         // 略降: rays 长度收敛 (避免远观大光晕)
+    weight: 0.30,        // 避免过曝淹没太阳本体
+    exposure: 0.40,      // 略降: rays 亮度更克制
+    samples: 80,
     clampMax: 1.0,
-    blendFunction: BlendFunction.SCREEN  // 屏幕叠加
+    blendFunction: BlendFunction.SCREEN
   }
   ```
 - **pmndrs EffectComposer 接口差异**（vs three.js 内置）：
   - `composer.render(deltaTime)` 需要显式传 deltaTime
   - 不需要 OutputPass（自带 tone mapping）
-  - `addPass(pass, index)` 第二个参数是 index（不是 insertPass）
+  - `addPass(pass, index)` 第二个参数是 index
 
-### `src/lighting.js` — 光照 + 太阳辉光（4 层 sprite 方案保留）
+### `src/lighting.js` — 光照
 - `initLighting(scene)`：AmbientLight(0x8090b0, 0.45) + PointLight(0xffffff, 3.5, 0, 0)
-- `makeSunGlow(sunR)`：**保留但不调用**（godrays 接管后 4 层 sprite 显得球层分界明显，且 baseScale 2.8×SUN_R ≈ 33.6u ≈ 水星轨道，会包住水星）
-- `setGlowEnabled(v)`：UI 仍调用它，但仅作为全局标志；目前无 sprite 需要它控制
+- **不调用** `makeSunGlow`（godrays 接管，4 层 sprite 方案废弃保留代码但不用）
 
-### `src/planets.js` — 太阳/行星/月球工厂
-- `makeTextSprite(text, color)` — Canvas 渲染文字标签 → Sprite
-- `addLabel(parent, text, yOffset)` — 挂标签
+### `src/planets.js` — 太阳 + 行星 + 月球 工厂
+- `makeTextSprite(text, color)` — Canvas 渲染文字标签 → Sprite (CanvasTexture)
+- `addLabel(parent, text, yOffset)` — 挂标签，标记 `userData.isLabel = true`
 - `makeOrbit(distance)` — 256 段 LineLoop 轨道环
-- `sunGlowSprites = []`（export）— **保留 export 但不再 push**（空数组，ui.js 的 forEach 跑空循环不报错）
+- `makePlanetDot(color)` — 远档 sprite（AdditiveBlending + 行星 color + 圆形贴图，tick 算屏幕 4px scale）
+- `makePlanetWithLOD(mesh, color, realSize)` — THREE.LOD 包装：2 档（mesh + dot），阈值 = `realSize × 384`（视觉 2px 距离）
+- **LOD 阈值表**（默认相机 3354 距太阳）：
+  - 水星 147 / 金星 364 / 地球 384 / 火星 204 / 木星 4304 / 土星 3628 / 天王星 1539 / 海王星 1491
+  - 默认相机下**全部 8 颗**距相机 > 阈值 → **全远档 dot**
+  - 用户拉近到 ~realSize×400 距离内 → 切近档 mesh
 - `makeSun(scene)`：
   - `safeTexture('./src/textures/sun.jpg')`
-  - SphereGeometry(1.0, 64, 64) + `MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})`（暖白 G2V 真实颜色）
-  - ~~4 层 sprite 辉光（halo/corona/glow/aura）~~ — **已注释掉**
-  - **sun label 单独 add 到 scene，不放进 sun mesh 子节点树**（重要：避免 godrays 把 label 也当光辐射）
-- `makePlanet(scene, p)`：realSize 几何（地球=1.0 基准），MeshStandardMaterial，土星/天王星环（RingGeometry + 贴图 UV 重映射），地球云层（独立 sphere + 顶点 displacement + 反向旋转）
+  - SphereGeometry(1.0, 64, 64) + `MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})`
+  - **永远 add mesh 到 scene（删了之前的 sun LOD 二档切档）**
+  - sun label 单独 add 到 scene，不放进 sun mesh 子节点树（避免 godrays 把 label 当光源）
+- `makePlanet(scene, p)`：
+  - realSize 几何（地球=1 基准）
+  - MeshStandardMaterial
+  - 土星/天王星环（RingGeometry + 贴图 UV 重映射）
+  - 地球云层（独立 sphere + 顶点 displacement + 反向旋转）
+  - **LOD 包装**：mesh 作为近档 + makePlanetDot(p.color) 作为远档
+  - **每行星动态阈值** `realSize × 384`
 - `makeMoon()` — 月球 mesh + pivot，挂在地球上
 
-### `src/ui.js` — UI
-- `initSliders(sunLight)` — 速度滑条 + 亮度滑条（直接 sunLight.intensity）
-- `initToggles(scene, camera, controls)` — orbits/labels/bloom/earth-clouds toggle
-  - **SUN GLOW toggle（关键 fix）**：
-    ```js
-    toggleBloom.addEventListener('change', () => {
-      const enabled = toggleBloom.checked;
-      const pass = window.__bloomPass;
-      if (pass) pass.strength = enabled ? BLOOM_ON : BLOOM_OFF;
-      setGlowEnabled(enabled);
-      sunGlowSprites.forEach(s => { s.visible = enabled; });
-      // 新增：联动 GodRaysEffect pass（控制 screen-space 光线辐射）
-      if (window.__setGodRaysEnabled) window.__setGodRaysEnabled(enabled);
-    });
-    ```
-- `bindStarsToggle(stars)` — 星空显示 + 密度滑条
-- `initInfoPanel()` — 点击星球显示 info（中文/EN facts）
-- `initLegend()` — 右下角图例
-- `initTracking(...)` — 点击追踪某星球
-- `initTrackingStopButton()` — 退出追踪
-- `initSceneClick(renderer, camera, getter)` — raycaster 点击
-- `initFloatingTools()` — GitHub + 背景音乐按钮
-- `initCollapse()` — 折叠面板
-
 ### `src/constants.js` — NASA 天文数据
-- `AU = 1`，`DIST_SCALE = 160`，`SUN_R = 12.0`
+- `AU = 1`，`DIST_SCALE = 2560`（×16 真实化）
+- `SUN_R = 12.0`
 - `PLANETS[]` — 8 行星（每颗含 distance/realSize/diameterKm/orbit/rotation/tilt/texture/factsZh/factsEn/factZh/factEn）
 - `MOON`, `SUN_FACTS`
 
@@ -210,8 +193,9 @@ solar-system/
 - `getSunDisplayRadius()` = SUN_R
 - `getDisplayDistance(p)` = AU × DIST_SCALE
 - `scaleScene()` — 遍历所有行星/轨道/标签应用缩放
+- 相机初始位置 (0, 1500, 3000)（DIST_SCALE×16 后太阳视觉 ~0.7% 视野）
 
-### `src/textures.js` — 贴图加载（222 行）
+### `src/textures.js` — 贴图加载
 - `safeTexture(url, label, onTick)` — 加载 + 错误降级 + 进度回调
 
 ### `src/i18n.js` / `src/tracking.v2.js` / `src/loader.js` / `src/ambient.js`
@@ -221,11 +205,18 @@ solar-system/
 
 ## 4. 关键不变量（事实）
 
-- **基线 commit**：`待提交 — GodRaysEffect 辉光方案`（工作树内容即新基线）
-- **太阳辉光当前方案**：`GodRaysEffect`（pmndrs 6.36.4，screen-space raymarched）
+- **基线 commit**：`b1c4a83`（轨道真实化 + LOD 三件套 + 太阳收敛调参）
+- **太阳辉光当前方案**：`GodRaysEffect`（pmndrs 6.36.4，screen-space raymarched，永远启用，无 LOD 切档）
 - **后处理顺序**：RenderPass → GodRaysEffect → BloomEffect（pmndrs EffectComposer 接管）
 - **太阳材质**：`MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})`
-- **8 个 viewport 距离**（基于 DIST_SCALE=160）：水星 d=31.2 / 海王星 d=2404
+- **轨道真实化**：`DIST_SCALE = 2560`（×16），水星距太阳 998 单位 = 83 个太阳直径（真实）
+- **LOD 系统**：
+  - 行星：`THREE.LOD`，阈值 = `realSize × 384`（视觉 2px 距离）
+  - 远档：4px sprite dot（AdditiveBlending + 行星 color）
+  - 近档：原 mesh（带贴图 + 环 + 云层 + label）
+  - 太阳：单一 mesh（删了 sun LOD，避免 sprite 视觉跳变）
+- **Label 系统**：屏幕像素尺寸动态 clamp [8, 24]px，4:1 文字比例，每帧 tick 算
+- **相机/控制范围**：camera.far 200000, OrbitControls.maxDistance 200000, zoomSpeed 2.0
 - **Cloudflare Pages 缓存**：HTML no-cache / JS+CSS 1 年 immutable（`_headers`）
 
 ---
@@ -234,21 +225,29 @@ solar-system/
 
 | Commit | 改动 |
 |---|---|
-| `46fd802` | **上一个基线**（辉光实验前的稳定版本） |
-| `d297e13` → `d6043f2` | 6 次辉光失败实验（starburst / lens flare / FakeGlow / EdgeGlow）— 全部失败回滚 |
-| `8c841a4` | 回滚 commit（lighting/planets/scene/ui → 46fd802 + 删除 EdgeGlow/FakeGlow）|
-| `cc2564b` | 新增 PROJECT_INDEX.md（后被重命名为 PROJECT.md）|
+| `cc2564b` | 新增 PROJECT_INDEX.md（后被重命名为 PROJECT.md） |
 | `3bf5415` | 新增 AGENTS.md |
-| **`待提交`** | **新基线**：GodRaysEffect 方案 + 删除太阳赤道环 + 删除 4 层 sprite |
+| `c317f17` | **辉光基线** — 太阳辉光改用 pmndrs/postprocessing GodRaysEffect |
+| `5e7d278` | **真实化基线** — DIST_SCALE 160→2560（×16），camera 拉远到 (0,1500,3000)，camera.far 200000 |
+| `b24f82d` | **LOD 基线** — 远档 sprite dot（屏幕 24px 初始）+ label 屏幕像素尺寸动态 clamp |
+| `3e23ac4` | **LOD 优化** — 阈值改成每行星动态 `realSize × 384`，远档 dot 24px→4px，新增太阳 LOD（mesh↔sun dot sprite 切档） |
+| **`b1c4a83`** | **当前基线** — 删太阳 LOD（二档切档 sprite 视觉丑，跟 mesh 跳变），godrays 参数收敛（density 0.94/decay 0.88/exposure 0.40） |
 
-**教训**：sprite / 程序化 / fake glow / edge glow 4 种方向全部失败 → 改走 GodRaysEffect（pmndrs 社区标准方案）一次成功。
+**教训记录**：
+1. **sprite 在 pmndrs composer 下能正常渲染**（之前误判为不显示，实际是 scale 太小导致亚像素）
+2. **SpriteMaterial + CanvasTexture 跟 mesh + CanvasTexture 都能渲染**，关键是 tick 按相机距离动态算 scale 让屏幕尺寸固定
+3. **LOD 阈值用"视觉直径 = 2px 距离 = realSize × 384"** 比固定值好（每行星独立的切换距离）
+4. **太阳 LOD 二档切档（mesh↔sprite）视觉跳变**——sprite 6px core + 12px halo + AdditiveBlending 跟星空叠加变成巨大光球，丑。改成永远 mesh + godrays 解决
 
 ---
 
 ## 6. 待办 / 后续方向
 
 - Cloudflare Pages 部署：直接 `git push` 触发自动构建（无需任何 build step）
+- 远档 dot 当前屏幕 4px，可调（5-8px 让 dot 更明显）
+- 4 个外行星（土/天/海）默认相机下距 > 5000，但阈值 ≤ 4304 应该是 dot —— **确认 LOD 切档对 4 外行星正确**（L1 dot）
 - 如果 godrays 在某些视角（特别是从行星表面看太阳时）出现视觉异常，再调 `density` / `decay` / `samples`
+- label 在远档 dot 时不显示（LOD 切档时 mesh 子节点不可见）—— 这是预期行为
 
 ---
 
@@ -256,10 +255,11 @@ solar-system/
 
 如果在新会话里读到这个文件：
 
-1. **确认 git 状态**：`git log --oneline -3` 应看到最新 commit 是 godrays 方案
+1. **确认 git 状态**：`git log --oneline -3` 应看到最新 commit 是 `b1c4a83` 或之后
 2. **不需要再读所有源码** — 直接基于第 3 节的功能摘要判断要怎么改
 3. **要改某个文件的具体细节**时，再用 read_file 读那一个文件
 4. **新 commit 后**：更新第 5 节的 commit 列表和第 4 节的"基线 commit"
+5. **优先回滚**：`git checkout b1c4a83 -- src/` 回到当前基线
 
 ---
 

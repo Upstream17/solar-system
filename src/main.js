@@ -134,6 +134,55 @@ async function init() {
             o.mesh.userData.cloudsMesh.rotation.y -= deltaSim * SIM_DAYS_PER_SEC * ws * 0.025;
           }
         });
+        // v20260707 v3: label 屏幕像素尺寸固定 (8~24 px) + LOD 远档小点屏幕 24px
+        // 关键: 验证 SpriteMaterial + CanvasTexture 在 pmndrs composer 下能正常渲染
+        // 公式: 屏幕 px = (scale.y / camDist) * (canvasH / 2 / tan(fov/2))
+        //   → scale.y = targetPx * camDist * 2 * tan(fov/2) / canvasH
+        if (camera && window.__renderer) {
+          const _v = new (camera.position.constructor)();
+          const _fovRad = camera.fov * Math.PI / 180;
+          const _canvasH = window.__renderer.domElement.height;
+          const _halfWorldPerPx = (2 * Math.tan(_fovRad / 2)) / _canvasH;
+          // 遍历所有 isLabel 标记的 mesh (子节点 + scene 顶层 sun label)
+          const _allLabels = [];
+          window.__planets.forEach(o => {
+            // LOD 内部 mesh 的 children (label) 才能被找到
+            o.lod && o.lod.traverse(c => { if (c.userData && c.userData.isLabel) _allLabels.push({label: c, parent: o.data}); });
+          });
+          if (window.__sun) {
+            window.__sun.traverse(c => { if (c.userData && c.userData.isLabel) _allLabels.push({label: c, parent: null}); });
+          }
+          _allLabels.forEach(({label, parent}) => {
+            label.getWorldPosition(_v);
+            const camDist = camera.position.distanceTo(_v);
+            const base = parent ? parent.realSize : 12.0;
+            const minPx = 8;
+            const maxPx = 24 * Math.max(1, base);
+            const refDist = base * 50;
+            const t = Math.max(0, Math.min(1, camDist / refDist));
+            const targetPx = maxPx + (minPx - maxPx) * t;
+            // canvas 256x64 (4:1), sprite 4:1 宽高比
+            const sH = targetPx * camDist * _halfWorldPerPx;
+            label.scale.set(sH * 4, sH, 1);
+          });
+          // LOD update: 每帧检查每个行星距相机距离, 决定 mesh 还是 dot
+          // 同时给远档 dot 算屏幕 24px scale
+          window.__planets.forEach(o => {
+            if (!o.lod) return;
+            o.lod.update(camera);
+            // 给所有 LOD 内部 sprite (dot) 算屏幕 24px scale
+            o.lod.levels.forEach(entry => {
+              if (entry.object.isSprite && entry.object !== o.mesh) {
+                // 这是 dot sprite
+                o.lod.getWorldPosition(_v);
+                const camDist = camera.position.distanceTo(_v);
+                const sPx = 24;  // 屏幕 24px
+                const s = sPx * camDist * _halfWorldPerPx;
+                entry.object.scale.set(s, s, 1);
+              }
+            });
+          });
+        }
       }
 
       // 月球

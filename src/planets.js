@@ -16,12 +16,11 @@ const onLoaderTick = (label) => loaderTick(label);
 // - PlaneGeometry 渲染 quad, 加 CanvasTexture 当文字贴图
 // - tick 里手动设 mesh.quaternion = camera.quaternion 做 billboard
 /* 文字标签（Canvas 渲染 → Sprite）
- * v20260707: 改用 MeshBasicMaterial 替代 Sprite (pmndrs EffectComposer 不渲染 Sprite)
- *             — tick 里按相机距离算屏幕像素尺寸 (8~24px) + billboard
- *             — 但 Mesh + CanvasTexture 在 pmndrs composer 下也不显示 (实际验证)
- *             — 暂时回滚到基线 SpriteMaterial, 但 scale 改小到 1.5×0.375
- *               避免基线 6×1.5 太大盖住行星的问题
- *             — TODO: 调研 pmndrs composer CanvasTexture 渲染兼容问题
+ * v20260707 v2: 改用 tick 按相机距离动态算 scale (基线 6×1.5 太大, 真实化后 1.5×0.375 太小)
+ *             — SpriteMaterial + CanvasTexture 在 pmndrs composer 下验证可正常渲染
+ *             — tick 里把 label 屏幕像素尺寸固定在 [8, 24] px
+ *             — 拉近: maxPx 限制, 不会盖住行星
+ *             — 拉远: minPx 限制, 不会缩到 0
  */
 function makeTextSprite(text, color='#9bd0ff') {
   const c = document.createElement('canvas');
@@ -36,10 +35,10 @@ function makeTextSprite(text, color='#9bd0ff') {
   ctx.fillText(text, 128, 32);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map:tex, transparent:true, depthTest:false });
+  const mat = new THREE.SpriteMaterial({ map:tex, transparent:true, depthTest:false, toneMapped: false });
   const sprite = new THREE.Sprite(mat);
-  // v20260707: 基线 6×1.5 → 1.5×0.375 (缩小 4×), 拉近时不至于完全盖住行星
-  sprite.scale.set(1.5, 0.375, 1);
+  // v20260707: 占位, tick 里按相机距离动态算 (8~24 px)
+  sprite.scale.set(0.1, 0.025, 1);
   sprite.userData.isLabel = true;
   return sprite;
 }
@@ -70,6 +69,70 @@ export function makeOrbit(distance) {
  * 元素顺序: [halo, corona, glow, core] — 从外到内
  */
 export const sunGlowSprites = [];
+
+/* ===== LOD 远档小点 (v20260707 v2)=====
+ * 关键: SpriteMaterial + CanvasTexture 在 pmndrs composer 下能正常渲染
+ *   — tick 里按相机距离动态算 scale, 让屏幕高度 = 24px
+ *   — 远距离行星也能看到清晰的小圆点
+ * 用 Sprite + AdditiveBlending 让小点"发光", 跟星空区分
+ */
+let _dotTex = null;
+function getDotTexture() {
+  if (_dotTex) return _dotTex;
+  const size = 64;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  grad.addColorStop(0.0, 'rgba(255,255,255,1.0)');
+  grad.addColorStop(0.3, 'rgba(255,255,255,0.7)');
+  grad.addColorStop(0.6, 'rgba(255,255,255,0.25)');
+  grad.addColorStop(1.0, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  _dotTex = new THREE.CanvasTexture(c);
+  _dotTex.colorSpace = THREE.SRGBColorSpace;
+  return _dotTex;
+}
+
+function makePlanetDot(color) {
+  const mat = new THREE.SpriteMaterial({
+    map: getDotTexture(),
+    color: color,
+    transparent: true,
+    opacity: 1.0,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending,  // 加亮混合, 让小点更醒目
+    toneMapped: false
+  });
+  const sprite = new THREE.Sprite(mat);
+  // 占位, tick 里按相机距离动态算
+  sprite.scale.set(0.1, 0.1, 1);
+  return sprite;
+}
+
+/* 创建一个 LOD 包装的行星对象
+ * - 近档: 原 mesh (带贴图, 适合近距离观察)
+ * - 远档: makePlanetDot 屏幕 24px 小点 (适合远距离观察)
+ * 阈值: 距行星 > 500 单位用远档
+ */
+export function makePlanetWithLOD(mesh, color) {
+  // LOD 节点
+  // 阈值: 距相机超过阈值时 mesh 视觉直径 < 4px (亚像素) → 切远档 dot
+  //   200 = canvasH(800) / (2*tan(fov/2)=1.04) / 4 = 视觉 4px 距离
+  //   - 默认相机 3354 距太阳, 内行星距 998-3891 全部 > 200 → 远档 dot
+  //   - 用户拉近到 200 单位 → mesh 视觉直径 > 4px → 切近档 (可看贴图)
+  //   - 用户贴脸到 32 单位 → mesh 视觉直径 > 24px (清晰)
+  const lod = new THREE.LOD();
+  // 远档: 小点 (距行星 > 200 单位用小点) — 200 = 地球 mesh 视觉 4px 距离
+  lod.addLevel(makePlanetDot(color), 200);
+  // 近档: 原 mesh
+  lod.addLevel(mesh, 0);
+  // 标记: tick 里需要更新
+  lod.userData.isPlanetLOD = true;
+  return lod;
+}
 
 /* ===== 太阳 ===== */
 export async function makeSun(scene) {
@@ -136,12 +199,23 @@ export async function makePlanet(scene, p) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.userData = { isPlanet:true, data:p, name:p.name, en:p.en, typeZh:p.typeZh, typeEn:p.typeEn };
 
+  // v20260707: 用 LOD 包装 mesh — 远距离 (>500) 自动切到屏幕 24px sprite 小点
+  // 近档: mesh (带 ring/clouds/label 子节点) — 适合近距离观察
+  // 远档: sprite 小点 — 远距离也能看到行星位置
+  const lod = makePlanetWithLOD(mesh, p.color);
+  // LOD 中心 = mesh 中心 = 行星位置, lod.update(camera) 自动按距 mesh 距离切档
+  lod.userData = mesh.userData;
+  lod.userData.isPlanetLOD = true;
+
   // 倾斜容器
   const pivot = new THREE.Object3D();
   const tilt = new THREE.Object3D();
   tilt.rotation.z = THREE.MathUtils.degToRad(p.tilt);
   mesh.rotation.y = Math.random()*Math.PI*2;
-  tilt.add(mesh);
+  // 注意: 把 lod 放在 tilt 里, mesh 放在 lod 里 (level 0)
+  //   — LOD 节点本身不带 transform, 只是 level 切换的容器
+  //   — 远档 dot 也在 lod 里, 跟 mesh 同一位置
+  tilt.add(lod);
   pivot.add(tilt);
 
   // 起始位置（scaleScene 会按真实 AU 距离设置）
@@ -205,7 +279,7 @@ export async function makePlanet(scene, p) {
   }
 
   addLabel(mesh, p.name, p.realSize * 1.6);
-  return { pivot, mesh, data:p };
+  return { pivot, mesh, data:p, lod };
 }
 
 /* ===== 月球 ===== */

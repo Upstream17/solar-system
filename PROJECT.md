@@ -247,7 +247,7 @@ solar-system/
 | `b1c4a83` | 删太阳 LOD（二档切档 sprite 视觉丑，跟 mesh 跳变），godrays 参数收敛（density 0.94/decay 0.88/exposure 0.40） |
 | `d14d943` | docs: 更新 PROJECT.md 对齐 b1c4a83 基线 |
 | **`7134d28`** | **当前基线** — `makeDistantGlow` 远日轨道太阳占位 sprite (LOD + 屏幕固定 48px + 用户调好对比度的 `lensflare_processed.png`)，解决远日轨道看不到太阳位置的问题 |
-| **`2249d02`** | **修复基线** — 移动端音乐按钮 script 错 (try/catch + 绝对路径) + 太阳 LOD 贴图渲染层级 (depthTest:true + renderOrder:0 解决 distantGlow 被当成 godrays 新光源) |
+| **`9191c27`** | **椭圆轨道 + 小行星带 (v20260708)** — `makeOrbit` 改椭圆参数公式 r=a(1-e²)/(1+e·cos(θ)) + 太阳在焦点 + perihelion 各异椭圆朝向不重; `makeAsteroidBelt` 2000 颗 Points 分布 2.1-3.3 AU, LOD 远档(>8000u) opacity 0.15 雾带 / 近档(<4000u) opacity 0.6 清晰, 1 draw call 移动端 60fps; 8 行星 inclination=0 (黄道面对齐, A 方案); 公转用 M≈θ 简化, 视觉足够 |
 
 **v20260707 distantGlow 设计过程教训**：
 1. **路线 3（godRaySource 150u 固定 mesh）失败**：world-unit 尺寸跟相机距离不解耦 → 近视角巨大光球

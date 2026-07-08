@@ -156,7 +156,7 @@ export function makeAsteroidBelt(distScale) {
     size: 1.5,               // 世界单位
     sizeAttenuation: true,   // 随距离缩小
     transparent: true,
-    opacity: 0.6,            // 默认清晰, tick 根据相机距离 LOD 调整
+    opacity: 0.7,            // 固定 (v20260708 修复, 见 updateAsteroidBelt 注释)
     depthWrite: false,
     blending: THREE.NormalBlending,
     toneMapped: false
@@ -167,15 +167,19 @@ export function makeAsteroidBelt(distScale) {
   return points;
 }
 
-/* 更新小行星位置 (main.js tick 调用) + 远档 LOD opacity
- * camDist: 相机到原点的距离
+/* 更新小行星位置 (main.js tick 调用)
  * elapsedDays: 模拟时间(天)
  * — 主带平均周期 ~3-5 年 (1100-1800 天), 角速度 = 2π/period
  * — 用 M≈θ 简化(小行星精度需求低, 视觉上够)
  * — 简化开普勒第三定律 T² ∝ a³ → T = 365.25 * a^1.5 (年转天, a 是 AU)
  *   a=2.7 AU → T ≈ 1610 天
+ *
+ * v20260708 修复: 删掉 camDist + LOD 渐变
+ *   — 远档 opacity 0.15 反而因为 α 累积看着是实心带, 近档反而稀
+ *   — 真实小行星带远看是带(自然累积), 近看是几个稀疏石头
+ *   — 不再 per-frame 调 opacity, 节省 2000 顶点遍历外的额外判断
  */
-export function updateAsteroidBelt(points, elapsedDays, camDist) {
+export function updateAsteroidBelt(points, elapsedDays) {
   if (!points) return;
   const geo = points.geometry;
   const posAttr = geo.getAttribute('position');
@@ -210,16 +214,14 @@ export function updateAsteroidBelt(points, elapsedDays, camDist) {
   }
   posAttr.needsUpdate = true;
 
-  // LOD: 远档雾带, 近档清晰
-  //   远阈值 8000u: opacity 0.15
-  //   近阈值 4000u: opacity 0.6
-  let opacity = 0.6;
-  if (camDist > 8000) opacity = 0.15;
-  else if (camDist > 4000) {
-    const t = (camDist - 4000) / 4000;  // 0→1
-    opacity = 0.6 - t * (0.6 - 0.15);
-  }
-  points.material.opacity = opacity;
+  // LOD 移除 (v20260708 修复):
+  //   远档 opacity 0.15 + 近档 opacity 0.6 的设计反了 —
+  //   远观: 2000 颗点挤在小角度区域, α 累积 ≈ 0.96 看着像实心带
+  //   近观: 视锥只覆盖 10-30 颗, 累积失效看着稀疏
+  //   真实小行星带: 远看是带(自然累积), 近看是几个稀疏石头
+  //   — 删 LOD 渐变, 固定 opacity 0.7
+  //   — 近观时靠 sizeAttenuation 让单点变大, 远观时靠数量累积成带
+  // 保留 LOD 函数位置但不再调用, 防止回归
 }
 
 /* 太阳辉光元素数组（4 层 Sprite，外部可访问以控制 visible）

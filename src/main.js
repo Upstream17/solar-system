@@ -215,9 +215,10 @@ async function init() {
       }
 
       // 小行星带 tick (v20260708)
+      //   — 位置每帧重算 (跟行星 tick 一致, 公转周期 ~3-5 年)
+      //   — LOD 渐变已移除 (v20260708 修复, 见 planets.js 注释)
       if (window.__asteroidBelt) {
-        const camDist = camera.position.length();
-        updateAsteroidBelt(window.__asteroidBelt, elapsedDays, camDist);
+        updateAsteroidBelt(window.__asteroidBelt, elapsedDays);
       }
 
       // 太阳自转

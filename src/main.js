@@ -19,7 +19,11 @@ import { PLANETS, SUN_R, MOON, DIST_SCALE } from './constants.js';
 // 进入页面立刻显示 loader overlay（在 JS bundle 完成前）
 Loader.show();
 
-const SIM_DAYS_PER_SEC = 5;
+// 1× 真实世界 1 day/sec (v20260708 改动)
+//   — 1× = 1 day/sec: 地球年 365 sec = 6 min 5 sec
+//   — 100× = 100 day/sec: 地球年 3.65 sec
+//   — 旧值 5 day/sec 偏快, 改成 1 让"1×"=真实世界速率
+const SIM_DAYS_PER_SEC = 1;
 let elapsedDays = 0;
 
 /* 入口 */

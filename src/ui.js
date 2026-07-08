@@ -14,18 +14,26 @@ const $ = id => document.getElementById(id);
 let speedFactor = 1;
 export function getSpeedFactor() { return speedFactor; }
 
+// 1× 真实世界 1 day/sec (v20260708 改动)
+//   — 1× = 1 day/sec, 地球年 6 分 13 秒看完
+//   — 100× = 100 day/sec, 地球年 3.65 秒看完
+//   — 旧值 5 day/sec 偏快 (地球年 73 秒), 新值贴合真实世界
+// — slider 行为不变, 只把 label 从"倍数"改成"天/秒"让用户看见真实速率
 function sliderToSpeed(v) {
-  // v 0-100: 0→暂停, 50→1×, 100→100×
+  // v 0-100: 0→暂停, 50→1×(1 day/s), 100→100×(100 day/s)
   if (v <= 0) return 0;
   if (v <= 50) return v / 50;
   return Math.pow(10, (v - 50) / 25);
 }
 function formatSpeed(s) {
+  // v20260708: 显示成"天/秒", 直观对齐真实时间
+  //   — 1 day/sec = 真实世界速率
+  //   — 10 day/sec = 加速 10× (地球年 36.5 秒)
   if (s === 0) return bi('speed_paused');
-  if (s < 0.1) return s.toFixed(2) + '×';
-  if (s < 1) return s.toFixed(1) + '×';
-  if (s < 10) return s.toFixed(1) + '×';
-  return Math.round(s) + '×';
+  if (s < 0.1) return s.toFixed(2) + ' day/s';
+  if (s < 1)   return s.toFixed(1) + ' day/s';
+  if (s < 10)  return s.toFixed(1) + ' day/s';
+  return Math.round(s) + ' day/s';
 }
 
 export function initSliders(sunLight) {

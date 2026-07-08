@@ -16,13 +16,12 @@ export function getSpeedFactor() { return speedFactor; }
 
 // 1× 真实世界 1 hour/sec (v20260708 改动, C 方案)
 //   — 1× = 1 hour/sec: 地球自转 24 sec, 公转 4 小时
-//   — 100× = 100 hour/sec: 地球年 2.48 分钟, 适合看公转
-//   — slider 行为不变, label 显示成"× 真实"(倍数 vs 真实时间)
-//   — 这样 1× 直观 = 1 hour/sec, 100× = 100 hour/sec
-//   — 比之前"天/秒"(用户得换算小时)更直接
-// — v20260708 演进: 5 day/s → 1 day/s (D 方案) → 1/24 day/s = 1 hour/s (C 方案)
+//   — 100× = 100 hour/sec: 地球年 2.48 分钟
+//   — 1000× = 1000 hour/sec = 41.7 day/sec: 地球年 8.75 秒看完
+//   — slider max=125 触达 1000×, 公式 (v-50)/25 不变
+//   — 演进: 5 day/s → 1 day/s (D) → 1/24 day/s = 1 hour/s (C) → 1000× 上限
 function sliderToSpeed(v) {
-  // v 0-100: 0→暂停, 50→1×(1 hour/s), 100→100×(100 hour/s)
+  // v 0-125: 0→暂停, 50→1×(1 hour/s), 100→100×, 125→1000×(41.7 day/s)
   if (v <= 0) return 0;
   if (v <= 50) return v / 50;
   return Math.pow(10, (v - 50) / 25);

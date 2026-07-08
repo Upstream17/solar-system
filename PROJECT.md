@@ -3,7 +3,7 @@
 > **给 AI 助手读的项目索引** — 跨会话续接时，先读这个文件就能掌握当前开发现状，不用重新探索。
 >
 > **最后更新**：2026-07-07
-> **基线 commit**：`7134d28`（distantGlow sprite — 远日轨道太阳占位 + 用户调好的星芒贴图）
+> **基线 commit**：`2249d02`（修复基线 — 移动端音乐按钮 script 错 + 太阳 LOD 贴图渲染层级）
 
 ---
 
@@ -218,9 +218,10 @@ solar-system/
 ## 4. 关键不变量（事实）
 
 - **基线 commit**：`7134d28`（distantGlow sprite — 远日轨道太阳占位 + 用户调好的星芒贴图）
-- **太阳辉光当前方案**：`GodRaysEffect`（pmndrs 6.36.4，screen-space raymarched，永远启用，无 LOD 切档）
-- **后处理顺序**：RenderPass → GodRaysEffect → BloomEffect（pmndrs EffectComposer 接管）
-- **太阳材质**：`MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})`
+| **太阳辉光当前方案**：`GodRaysEffect`（pmndrs 6.36.4，screen-space raymarched，永远启用，无 LOD 切档） |
+| **后处理顺序**：RenderPass → GodRaysEffect → BloomEffect（pmndrs EffectComposer 接管） |
+| **太阳材质**：`MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})` |
+| **distantGlow sprite**：`depthTest:true` + `renderOrder:0`（默认）+ `NormalBlending` + `frustumCulled:false`。**不要** `depthTest:false` + `renderOrder:9999`——会让 distantGlow 被当成 godrays 新光源向四周辐射（v20260708 修复） |
 - **轨道真实化**：`DIST_SCALE = 2560`（×16），水星距太阳 998 单位 = 83 个太阳直径（真实）
 - **LOD 系统**：
   - 行星：`THREE.LOD`，阈值 = `realSize × 384`（视觉 2px 距离）
@@ -246,6 +247,7 @@ solar-system/
 | `b1c4a83` | 删太阳 LOD（二档切档 sprite 视觉丑，跟 mesh 跳变），godrays 参数收敛（density 0.94/decay 0.88/exposure 0.40） |
 | `d14d943` | docs: 更新 PROJECT.md 对齐 b1c4a83 基线 |
 | **`7134d28`** | **当前基线** — `makeDistantGlow` 远日轨道太阳占位 sprite (LOD + 屏幕固定 48px + 用户调好对比度的 `lensflare_processed.png`)，解决远日轨道看不到太阳位置的问题 |
+| **`2249d02`** | **修复基线** — 移动端音乐按钮 script 错 (try/catch + 绝对路径) + 太阳 LOD 贴图渲染层级 (depthTest:true + renderOrder:0 解决 distantGlow 被当成 godrays 新光源) |
 
 **v20260707 distantGlow 设计过程教训**：
 1. **路线 3（godRaySource 150u 固定 mesh）失败**：world-unit 尺寸跟相机距离不解耦 → 近视角巨大光球

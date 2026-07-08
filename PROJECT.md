@@ -1,9 +1,9 @@
 # PROJECT — 太阳系 3D 探索器
 
 > **给 AI 助手读的项目索引** — 跨会话续接时，先读这个文件就能掌握当前开发现状，不用重新探索。
->
-> **最后更新**：2026-07-07
-> **基线 commit**：`2249d02`（修复基线 — 移动端音乐按钮 script 错 + 太阳 LOD 贴图渲染层级）
+
+> **最后更新**：2026-07-08
+> **基线 commit**：`12a74aa`（v20260708 轨道 + 时间基线 — 椭圆轨道 + 小行星带 + 1× = 1 hour/sec + slider 上限 1000×）
 
 ---
 
@@ -64,7 +64,7 @@ solar-system/
 │   ├── main.js              # 入口 — async init() 串联所有模块
 │   ├── scene.js             # scene + camera + renderer + OrbitControls + 星空 + 后处理 pipeline（GodRays + Bloom）
 │   ├── lighting.js          # 光照（sunLight PointLight, decay=0 模拟平行光 + ambient）
-│   ├── planets.js           # makeSun / makePlanet (含 LOD) / makeMoon / makeOrbit / makeTextSprite / makePlanetDot
+│   ├── planets.js           # makeSun / makePlanet (含 LOD) / makeMoon / makeOrbit (椭圆 v20260708) / makeAsteroidBelt (v20260708) / makeTextSprite / makePlanetDot
 │   ├── constants.js         # NASA 数据（PLANETS、MOON、SUN_FACTS、DIST_SCALE=2560、SUN_R=12）
 │   ├── scale.js             # 距离/半径缩放工具
 │   ├── textures.js          # safeTexture 加载器
@@ -115,13 +115,15 @@ solar-system/
   11. resize 监听
   12. **主循环** `tick()`：
       - deltaReal（相机动画、星空旋转）/ deltaSim（受 speedFactor 影响）
-      - 行星公转 + 自转 + 地球云层反向旋转
+      - **SIM_DAYS_PER_SEC = 1/24 (v20260708 C 方案, 1× = 1 hour/sec)**
+      - 行星公转（椭圆参数公式 r=a(1-e²)/(1+e·cos(θ))）+ 自转 + 地球云层反向旋转
       - 月球轨道
       - 太阳自转
       - 星空 uTime + 位置跟随相机
       - **label 屏幕像素尺寸动态 clamp**（8~24px，4:1 文字比例）
       - **LOD update** + 远档 dot 屏幕 4px scale
       - **distantGlow.update(cameraDistance)** — 远日占位 sprite 按距离 LOD 渐入
+      - **小行星带 tick** — 2000 颗 Points 位置每帧重算
       - 相机动画 + 追踪
       - `composer.render(deltaReal)` — pmndrs composer 需要传 deltaTime
 
@@ -172,7 +174,12 @@ solar-system/
 ### `src/planets.js` — 太阳 + 行星 + 月球 工厂
 - `makeTextSprite(text, color)` — Canvas 渲染文字标签 → Sprite (CanvasTexture)
 - `addLabel(parent, text, yOffset)` — 挂标签，标记 `userData.isLabel = true`
-- `makeOrbit(distance)` — 256 段 LineLoop 轨道环
+- `makeOrbit(distance, eccentricity, perihelion)` — 256 段 LineLoop 椭圆轨道环 (v20260708)
+  - 公式: r(θ) = a(1-e²)/(1+e·cos(θ)), 太阳在焦点
+  - 默认 e=0 时退化为正圆, 8 行星 inclination=0 黄道面对齐
+- `makeAsteroidBelt(distScale)` (v20260708) — 2000 颗 THREE.Points, 2.1-3.3 AU 主带
+  - 每颗独立 ecc 0.05-0.2 / perihelion 随机 / inclination ±10°
+  - `updateAsteroidBelt(points, elapsedDays)` 每帧重算位置, 固定 opacity 0.7 (LOD 反了已删)
 - `makePlanetDot(color)` — 远档 sprite（AdditiveBlending + 行星 color + 圆形贴图，tick 算屏幕 4px scale）
 - `makePlanetWithLOD(mesh, color, realSize)` — THREE.LOD 包装：2 档（mesh + dot），阈值 = `realSize × 384`（视觉 2px 距离）
 - **LOD 阈值表**（默认相机 3354 距太阳）：
@@ -222,6 +229,9 @@ solar-system/
 | **后处理顺序**：RenderPass → GodRaysEffect → BloomEffect（pmndrs EffectComposer 接管） |
 | **太阳材质**：`MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})` |
 | **distantGlow sprite**：`depthTest:true` + `renderOrder:0`（默认）+ `NormalBlending` + `frustumCulled:false`。**不要** `depthTest:false` + `renderOrder:9999`——会让 distantGlow 被当成 godrays 新光源向四周辐射（v20260708 修复） |
+| **轨道椭圆化 (v20260708)**：`makeOrbit` 用参数公式 r(θ)=a(1-e²)/(1+e·cos(θ))，太阳在焦点; 8 行星 inclination=0 黄道面对齐 (A 方案); 公转用 M≈θ 简化(避免开普勒迭代) |
+| **小行星带 (v20260708)**：2000 颗 THREE.Points, 2.1-3.3 AU, 1 draw call; **固定 opacity 0.7, 无 LOD 渐变** (远档 α 累积反成实心带, 7ebe793 修复) |
+| **时间流速 (v20260708)**：SIM_DAYS_PER_SEC = 1/24, 1× = 1 hour/sec; slider max 125, v=125→1000× (10^(125-50)/25 = 10^3); 1× 看自转, 100-1000× 看公转 |
 - **轨道真实化**：`DIST_SCALE = 2560`（×16），水星距太阳 998 单位 = 83 个太阳直径（真实）
 - **LOD 系统**：
   - 行星：`THREE.LOD`，阈值 = `realSize × 384`（视觉 2px 距离）
@@ -246,8 +256,13 @@ solar-system/
 | `3e23ac4` | **LOD 优化** — 阈值改成每行星动态 `realSize × 384`，远档 dot 24px→4px，新增太阳 LOD（mesh↔sun dot sprite 切档） |
 | `b1c4a83` | 删太阳 LOD（二档切档 sprite 视觉丑，跟 mesh 跳变），godrays 参数收敛（density 0.94/decay 0.88/exposure 0.40） |
 | `d14d943` | docs: 更新 PROJECT.md 对齐 b1c4a83 基线 |
-| **`7134d28`** | **当前基线** — `makeDistantGlow` 远日轨道太阳占位 sprite (LOD + 屏幕固定 48px + 用户调好对比度的 `lensflare_processed.png`)，解决远日轨道看不到太阳位置的问题 |
+| `7134d28` | `makeDistantGlow` 远日轨道太阳占位 sprite (LOD + 屏幕固定 48px + 用户调好对比度的 `lensflare_processed.png`)，解决远日轨道看不到太阳位置的问题 |
+| `2249d02` | 移动端音乐按钮 script 错 (try/catch + 绝对路径) + 太阳 LOD 贴图渲染层级 (depthTest:true + renderOrder:0 解决 distantGlow 被当成 godrays 新光源) |
 | **`9191c27`** | **椭圆轨道 + 小行星带 (v20260708)** — `makeOrbit` 改椭圆参数公式 r=a(1-e²)/(1+e·cos(θ)) + 太阳在焦点 + perihelion 各异椭圆朝向不重; `makeAsteroidBelt` 2000 颗 Points 分布 2.1-3.3 AU, LOD 远档(>8000u) opacity 0.15 雾带 / 近档(<4000u) opacity 0.6 清晰, 1 draw call 移动端 60fps; 8 行星 inclination=0 (黄道面对齐, A 方案); 公转用 M≈θ 简化, 视觉足够 |
+| `7ebe793` | fix(belt): 小行星带 LOD 反了, 删掉 opacity 渐变 — 远档 α 累积反成实心带, 近档累积失效反稀, 固定 opacity 0.7 让 2000 颗自然累积 |
+| `1416789` | feat(time): 1× = 1 day/sec (D 方案, 自转/公转比例对齐真实, 地球年 6 分 5 秒) — **已被 b1a5aff 推翻** |
+| `b1a5aff` | feat(time): 1× = 1 hour/sec (C 方案) — 1× = 1 hour/s, 地球自转 24 sec, 公转 4 小时; 旧值 5 day/s → 1 day/s (D) → 1/24 day/s = 1 hour/s (C) |
+| **`12a74aa`** | **当前基线 (v20260708 轨道+时间)** — slider max 100→125, 1000× 触达 (公式 (v-50)/25 不变, v=125 → 10^3 = 1000×); 1000× = 1000 hour/s = 41.7 day/s, 地球年 8.75 秒看完 |
 
 **v20260707 distantGlow 设计过程教训**：
 1. **路线 3（godRaySource 150u 固定 mesh）失败**：world-unit 尺寸跟相机距离不解耦 → 近视角巨大光球
@@ -269,12 +284,12 @@ solar-system/
 ---
 
 ## 6. 待办 / 后续方向
-
-- Cloudflare Pages 部署：直接 `git push` 触发自动构建（无需任何 build step）
+- Cloudflare Pages 部署：直接 `git push` 触发自动构建（无需任何 build step）— **v20260708 已部署新基线 12a74aa**
 - 远档 dot 当前屏幕 4px，可调（5-8px 让 dot 更明显）
 - 4 个外行星（土/天/海）默认相机下距 > 5000，但阈值 ≤ 4304 应该是 dot —— **确认 LOD 切档对 4 外行星正确**（L1 dot）
 - 如果 godrays 在某些视角（特别是从行星表面看太阳时）出现视觉异常，再调 `density` / `decay` / `samples`
 - label 在远档 dot 时不显示（LOD 切档时 mesh 子节点不可见）—— 这是预期行为
+- 太阳辉光优化：1× 时 `GodRaysEffect` + `BloomEffect` 偏亮，远档需要更柔和的 sun mesh（待评估）
 
 ---
 

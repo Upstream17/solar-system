@@ -19,11 +19,17 @@ import { PLANETS, SUN_R, MOON, DIST_SCALE } from './constants.js';
 // 进入页面立刻显示 loader overlay（在 JS bundle 完成前）
 Loader.show();
 
-// 1× 真实世界 1 day/sec (v20260708 改动)
-//   — 1× = 1 day/sec: 地球年 365 sec = 6 min 5 sec
-//   — 100× = 100 day/sec: 地球年 3.65 sec
-//   — 旧值 5 day/sec 偏快, 改成 1 让"1×"=真实世界速率
-const SIM_DAYS_PER_SEC = 1;
+// 1× 真实世界 1 hour/sec (v20260708 改动, C 方案)
+//   — 1 sec = 1 hour = 1/24 day
+//   — SIM_DAYS_PER_SEC = 1/24 (小时转天)
+//   — 地球自转 1 圈 = 24 sec (看昼夜/云层)
+//   — 地球公转 1 圈 = 4 小时 8 分 (看公转要 100× 加速, 2.5 分钟看完)
+//   — 木星自转 1 圈 = 9.84 sec (看大红斑)
+//   — 月球公转 = 10 分 54 秒
+//   — 海王星公转 = 33 天
+//   — 旧值 1 day/sec 自转/公转比例虽对, 但 1× 体感太闪 (自转 1 秒=昼夜闪烁)
+//   — C 方案折中: 1× 自转能看, 100× 公转能看, 海王星仍 33 天
+const SIM_DAYS_PER_SEC = 1 / 24;
 let elapsedDays = 0;
 
 /* 入口 */

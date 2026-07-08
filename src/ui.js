@@ -14,26 +14,30 @@ const $ = id => document.getElementById(id);
 let speedFactor = 1;
 export function getSpeedFactor() { return speedFactor; }
 
-// 1× 真实世界 1 day/sec (v20260708 改动)
-//   — 1× = 1 day/sec, 地球年 6 分 13 秒看完
-//   — 100× = 100 day/sec, 地球年 3.65 秒看完
-//   — 旧值 5 day/sec 偏快 (地球年 73 秒), 新值贴合真实世界
-// — slider 行为不变, 只把 label 从"倍数"改成"天/秒"让用户看见真实速率
+// 1× 真实世界 1 hour/sec (v20260708 改动, C 方案)
+//   — 1× = 1 hour/sec: 地球自转 24 sec, 公转 4 小时
+//   — 100× = 100 hour/sec: 地球年 2.48 分钟, 适合看公转
+//   — slider 行为不变, label 显示成"× 真实"(倍数 vs 真实时间)
+//   — 这样 1× 直观 = 1 hour/sec, 100× = 100 hour/sec
+//   — 比之前"天/秒"(用户得换算小时)更直接
+// — v20260708 演进: 5 day/s → 1 day/s (D 方案) → 1/24 day/s = 1 hour/s (C 方案)
 function sliderToSpeed(v) {
-  // v 0-100: 0→暂停, 50→1×(1 day/s), 100→100×(100 day/s)
+  // v 0-100: 0→暂停, 50→1×(1 hour/s), 100→100×(100 hour/s)
   if (v <= 0) return 0;
   if (v <= 50) return v / 50;
   return Math.pow(10, (v - 50) / 25);
 }
 function formatSpeed(s) {
-  // v20260708: 显示成"天/秒", 直观对齐真实时间
-  //   — 1 day/sec = 真实世界速率
-  //   — 10 day/sec = 加速 10× (地球年 36.5 秒)
+  // v20260708 C 方案: label 显示成"× 真实", 直观对齐真实时间
+  //   — 1× = 真实 1 hour/sec
+  //   — 10× = 10 hour/sec
+  //   — 100× = 100 hour/sec = 4.17 day/sec
+  // — 替代之前"day/s"(用户得心算 ×24 转 hour)
   if (s === 0) return bi('speed_paused');
-  if (s < 0.1) return s.toFixed(2) + ' day/s';
-  if (s < 1)   return s.toFixed(1) + ' day/s';
-  if (s < 10)  return s.toFixed(1) + ' day/s';
-  return Math.round(s) + ' day/s';
+  if (s < 0.1) return s.toFixed(2) + '×';
+  if (s < 1)   return s.toFixed(1) + '×';
+  if (s < 10)  return s.toFixed(1) + '×';
+  return Math.round(s) + '×';
 }
 
 export function initSliders(sunLight) {

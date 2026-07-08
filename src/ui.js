@@ -91,6 +91,16 @@ export function initToggles(scene, camera, controls) {
       }
     });
   });
+
+  // v20260708: 小行星带开关
+  const toggleAsteroids = $('toggle-asteroids');
+  if (toggleAsteroids) {
+    toggleAsteroids.addEventListener('change', () => {
+      if (window.__asteroidBelt) {
+        window.__asteroidBelt.visible = toggleAsteroids.checked;
+      }
+    });
+  }
 }
 
 /* 星空显示 + 密度控制 */

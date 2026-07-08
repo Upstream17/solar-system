@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import * as Loader from './loader.js';
 import { initScene, updateStarsTime, updateStarPositions } from './scene.js';
 import { initLighting } from './lighting.js';
-import { makeSun, makePlanet, makeMoon, makeOrbit } from './planets.js';
+import { makeSun, makePlanet, makeMoon, makeOrbit, makeAsteroidBelt, updateAsteroidBelt } from './planets.js';
 import { scaleScene, getDisplayDistance } from './scale.js';
 import { initTracking, tickCameraAnim, tickTracking } from './tracking.v2.js';
 import {
@@ -61,6 +61,13 @@ async function init() {
       planetObjs[2].mesh.add(moonObj.pivot);
     } catch (e) { console.error('moon failed:', e); }
     window.__moon = moonObj;
+
+    // 5.5 小行星带 (v20260708) — 2000 颗 Points, 火星-木星之间
+    //   — 放在月亮之后, 行星 tick 之前 (跟 planets 平级, scene 顶层)
+    //   — 自己的 LOD tick, 不影响行星 LOD
+    const asteroidBelt = makeAsteroidBelt(DIST_SCALE);
+    scene.add(asteroidBelt);
+    window.__asteroidBelt = asteroidBelt;
 
     // 6. 太阳轨道环
     // — 之前加了 makeOrbit(SUN_R * 1.05) 作为"中心锚点"提示
@@ -122,11 +129,27 @@ async function init() {
       if (window.__planets) {
         window.__planets.forEach(o=>{
           const p = o.data;
-          // 距离从 scale 模块获取（会根据演示/真实模式自动调整）
+          // v20260708: 椭圆公转
+          //   — semiMajor = p.distance × DIST_SCALE (世界单位)
+          //   — e = p.eccentricity (从 PLANETS 读)
+          //   — ω = p.perihelion × π/180 (从 PLANETS 读)
+          //   — 平近点角 M = elapsedDays × w (w = 2π / p.orbit, orbit 是地球日)
+          //   — 用 M≈θ 简化(精度足够视觉, 避免开普勒迭代)
+          //   — r(θ) = a(1-e²) / (1 + e·cos(θ))
           const w = (Math.PI*2) / p.orbit;
-          const ang = elapsedDays * w;
-          const dist = getDisplayDistance(p);
-          o.pivot.position.set(Math.cos(ang)*dist, 0, Math.sin(ang)*dist);
+          const theta = elapsedDays * w;  // 真近点角近似
+          const a = getDisplayDistance(p);
+          const e = p.eccentricity || 0;
+          const omega = (p.perihelion || 0) * Math.PI / 180;
+          const r = a * (1 - e*e) / (1 + e * Math.cos(theta));
+          const xEll = r * Math.cos(theta);
+          const yEll = r * Math.sin(theta);
+          // 旋 ω 到世界坐标
+          const cosO = Math.cos(omega), sinO = Math.sin(omega);
+          const wx = xEll * cosO - yEll * sinO;
+          const wz = xEll * sinO + yEll * cosO;
+          o.pivot.position.set(wx, 0, wz);
+          // 自转
           const ws = (Math.PI*2) / (p.rotation || 1);
           o.mesh.rotation.y += deltaSim * SIM_DAYS_PER_SEC * ws * 0.02;
           // 地球云层反向旋转（西风效应，制造大气流动感）
@@ -189,6 +212,12 @@ async function init() {
         const wm = (Math.PI*2) / MOON.orbit;
         moon.pivot.rotation.y = elapsedDays * wm;
         moon.mesh.rotation.y += deltaSim * 0.01;
+      }
+
+      // 小行星带 tick (v20260708)
+      if (window.__asteroidBelt) {
+        const camDist = camera.position.length();
+        updateAsteroidBelt(window.__asteroidBelt, elapsedDays, camDist);
       }
 
       // 太阳自转

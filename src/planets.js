@@ -50,19 +50,176 @@ function addLabel(parent, text, yOffset, sceneRef) {
   return s;
 }
 
-/* 轨道线（圆环） */
-export function makeOrbit(distance) {
+/* 轨道线（椭圆）v20260708
+ * 接收 a=semiMajor + eccentricity + perihelion(度)
+ * 公式: r(θ) = a(1-e²) / (1 + e·cos(θ-ω))  θ 从近心点起算
+ *       x = r·cos(θ), z = r·sin(θ)  (贴黄道面 y=0)
+ * 太阳在椭圆焦点(0,0,0), 焦点距中心 = a·e
+ * — 默认 e=0 (正圆) 时退化为半径 a 的圆
+ * — 8 颗行星 inclination 全部 0, 保持黄道面对齐
+ */
+export function makeOrbit(distance, eccentricity = 0, perihelion = 0) {
   const seg = 256;
+  const a = distance;
+  const e = eccentricity;
+  const omega = perihelion * Math.PI / 180;  // 弧度
   const pts = [];
   for (let i=0;i<=seg;i++){
-    const a = (i/seg)*Math.PI*2;
-    pts.push(new THREE.Vector3(Math.cos(a)*distance, 0, Math.sin(a)*distance));
+    const theta = (i/seg)*Math.PI*2;  // 真近点角(从近心点起算)
+    // 太阳在焦点, 椭圆中心在 (-a*e*cos(ω), 0, -a*e*sin(ω))
+    // 行星位置 = 椭圆中心 + 极坐标 (r, θ) 旋转到世界坐标系
+    const r = a * (1 - e*e) / (1 + e * Math.cos(theta));
+    // 椭圆"极坐标"以近心点为 0, 在椭圆局部: x_ell = r*cos(θ), y_ell = r*sin(θ)
+    // 旋转 ω 把近心点旋到世界 +X 方向(因为 θ=0 时 cos=1, r=a(1-e))
+    const xEll = r * Math.cos(theta);
+    const yEll = r * Math.sin(theta);
+    // 旋转 ω: world.x = xEll*cos(ω) - yEll*sin(ω), world.z = xEll*sin(ω) + yEll*cos(ω)
+    const wx = xEll * Math.cos(omega) - yEll * Math.sin(omega);
+    const wz = xEll * Math.sin(omega) + yEll * Math.cos(omega);
+    pts.push(new THREE.Vector3(wx, 0, wz));
   }
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
   const mat = new THREE.LineBasicMaterial({ color:0x335577, transparent:true, opacity:0.45 });
   const line = new THREE.LineLoop(geo, mat);
   line.userData.isOrbit = true;
   return line;
+}
+
+/* ===== 小行星带 (v20260708) =====
+ * 2000 颗 Points, 分布 2.1-3.3 AU (火星 1.52 ↔ 木星 5.20 之间)
+ * 每颗: 随机 semiMajor(2.1-3.3) + 随机 ecc(0.05-0.2) + 随机 perihelion + 随机 inclination(±10°)
+ * — 真实小行星带特征: 偏心率分散 + 倾角分散
+ * — 远档 LOD: opacity 0.15 (雾带感, 不抢戏)
+ * — 近档 LOD: opacity 0.6 (清晰小点, 个体可辨)
+ * — 每帧更新位置 (公转), 主带平均周期 ~3-5 年
+ *
+ * 性能: 1 draw call, BufferGeometry 2000 顶点, 移动端 60 fps 无压力
+ */
+const ASTEROID_COUNT = 2000;
+const BELT_INNER = 2.1;   // AU
+const BELT_OUTER = 3.3;   // AU
+
+export function makeAsteroidBelt(distScale) {
+  const geo = new THREE.BufferGeometry();
+  // v20260708: 每颗预计算轨道参数, 存到 attribute (a, e, ω, i, M0)
+  //   — 不预计算位置, 位置每帧由 elapsedDays 算 (跟主行星 tick 一致)
+  //   — 这样"行星飞过去时小行星也在动"是统一的
+  const aArr = new Float32Array(ASTEROID_COUNT);
+  const eArr = new Float32Array(ASTEROID_COUNT);
+  const oArr = new Float32Array(ASTEROID_COUNT);  // perihelion 弧度
+  const iArr = new Float32Array(ASTEROID_COUNT);  // inclination 弧度
+  const mArr = new Float32Array(ASTEROID_COUNT);  // 初始平近点角(弧度)
+  for (let i = 0; i < ASTEROID_COUNT; i++) {
+    const sma = BELT_INNER + Math.random() * (BELT_OUTER - BELT_INNER);
+    // 随机偏心率 0.05-0.2 (真实小行星带主带特征)
+    const e = 0.05 + Math.random() * 0.15;
+    // 随机近心点辐角 0-360°
+    const om = Math.random() * Math.PI * 2;
+    // 随机轨道倾角 ±10° (小行星带特征)
+    const inc = (Math.random() - 0.5) * 0.35;  // 0.35 rad ≈ 20° 峰-峰
+    // 初始平近点角 0-360°
+    const m0 = Math.random() * Math.PI * 2;
+    aArr[i] = sma;
+    eArr[i] = e;
+    oArr[i] = om;
+    iArr[i] = inc;
+    mArr[i] = m0;
+  }
+  geo.setAttribute('aParam', new THREE.BufferAttribute(aArr, 1));
+  geo.setAttribute('eParam', new THREE.BufferAttribute(eArr, 1));
+  geo.setAttribute('oParam', new THREE.BufferAttribute(oArr, 1));
+  geo.setAttribute('iParam', new THREE.BufferAttribute(iArr, 1));
+  geo.setAttribute('mParam', new THREE.BufferAttribute(mArr, 1));
+
+  // 位置 attribute — 每帧重写
+  const posArr = new Float32Array(ASTEROID_COUNT * 3);
+  geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+
+  // 程序化小行星点贴图 — 跟 planet dot 同款径向渐变
+  const size = 32;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  grad.addColorStop(0.0, 'rgba(255,255,255,1.0)');
+  grad.addColorStop(0.4, 'rgba(255,255,255,0.6)');
+  grad.addColorStop(0.8, 'rgba(255,255,255,0.15)');
+  grad.addColorStop(1.0, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const mat = new THREE.PointsMaterial({
+    map: tex,
+    color: 0xb8a890,         // 灰棕小行星色
+    size: 1.5,               // 世界单位
+    sizeAttenuation: true,   // 随距离缩小
+    transparent: true,
+    opacity: 0.6,            // 默认清晰, tick 根据相机距离 LOD 调整
+    depthWrite: false,
+    blending: THREE.NormalBlending,
+    toneMapped: false
+  });
+  const points = new THREE.Points(geo, mat);
+  points.userData.isAsteroidBelt = true;
+  points.userData.distScale = distScale;
+  return points;
+}
+
+/* 更新小行星位置 (main.js tick 调用) + 远档 LOD opacity
+ * camDist: 相机到原点的距离
+ * elapsedDays: 模拟时间(天)
+ * — 主带平均周期 ~3-5 年 (1100-1800 天), 角速度 = 2π/period
+ * — 用 M≈θ 简化(小行星精度需求低, 视觉上够)
+ * — 简化开普勒第三定律 T² ∝ a³ → T = 365.25 * a^1.5 (年转天, a 是 AU)
+ *   a=2.7 AU → T ≈ 1610 天
+ */
+export function updateAsteroidBelt(points, elapsedDays, camDist) {
+  if (!points) return;
+  const geo = points.geometry;
+  const posAttr = geo.getAttribute('position');
+  const aAttr = geo.getAttribute('aParam');
+  const eAttr = geo.getAttribute('eParam');
+  const oAttr = geo.getAttribute('oParam');
+  const iAttr = geo.getAttribute('iParam');
+  const mAttr = geo.getAttribute('mParam');
+  const ds = points.userData.distScale;
+  const N = posAttr.count;
+  for (let i = 0; i < N; i++) {
+    const a = aAttr.array[i] * ds;        // 世界单位
+    const e = eAttr.array[i];
+    const om = oAttr.array[i];            // 弧度
+    const inc = iAttr.array[i];
+    const m0 = mAttr.array[i];
+    // 周期 (天) — 简化开普勒第三定律
+    const aAU = a / ds;
+    const periodDays = 365.25 * Math.pow(aAU, 1.5);
+    const w = (Math.PI * 2) / periodDays;
+    const theta = m0 + elapsedDays * w;  // 真近点角近似
+    const r = a * (1 - e*e) / (1 + e * Math.cos(theta));
+    const xEll = r * Math.cos(theta);
+    const yEll = r * Math.sin(theta);
+    // 旋 ω 到世界坐标
+    const cosO = Math.cos(om), sinO = Math.sin(om);
+    const wx = xEll * cosO - yEll * sinO;
+    const wz = xEll * sinO + yEll * cosO;
+    // 倾角: y 分量 (简化 — 倾角小, 视觉差异不大)
+    const wy = yEll * Math.sin(inc);
+    posAttr.setXYZ(i, wx, wy, wz);
+  }
+  posAttr.needsUpdate = true;
+
+  // LOD: 远档雾带, 近档清晰
+  //   远阈值 8000u: opacity 0.15
+  //   近阈值 4000u: opacity 0.6
+  let opacity = 0.6;
+  if (camDist > 8000) opacity = 0.15;
+  else if (camDist > 4000) {
+    const t = (camDist - 4000) / 4000;  // 0→1
+    opacity = 0.6 - t * (0.6 - 0.15);
+  }
+  points.material.opacity = opacity;
 }
 
 /* 太阳辉光元素数组（4 层 Sprite，外部可访问以控制 visible）

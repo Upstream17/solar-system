@@ -29,6 +29,8 @@ export const PLANETS = [
     name:'水星', en:'Mercury', color:0xb5a187,
     distance:0.39, size:0.383, realSize:0.383, diameterKm:4879,
     orbit:88,   rotation:58.6,  tilt:0.03, eccentricity:0.205,
+    // v20260708: 椭圆轨道 — inclination 黄道面倾角(度, A 方案=0), perihelion 近心点辐角(度, 椭圆长轴朝向)
+    inclination:0, perihelion:29,  // 水星近心点不在 +X (29° 是真实值), 视觉上椭圆朝向更真实
     texture:'./src/textures/mercury.jpg',
     typeZh:'类地行星 · 岩石行星',
     typeEn:'Terrestrial · Rocky Planet',
@@ -43,6 +45,7 @@ export const PLANETS = [
     name:'金星', en:'Venus', color:0xe8c084,
     distance:0.72, size:0.949, realSize:0.949, diameterKm:12104,
     orbit:225,  rotation:-243,  tilt:177.4, eccentricity:0.007,
+    inclination:0, perihelion:55,  // 金星 e 极小(0.007), 视觉上几乎正圆, 近心角取真实 55°
     texture:'./src/textures/venus.jpg',
     typeZh:'类地行星 · 岩石行星',
     typeEn:'Terrestrial · Rocky Planet',
@@ -57,6 +60,7 @@ export const PLANETS = [
     name:'地球', en:'Earth', color:0x3a8fd7,
     distance:1.00, size:1.000, realSize:1.000, diameterKm:12742,
     orbit:365.25, rotation:1,   tilt:23.44, eccentricity:0.017,
+    inclination:0, perihelion:103,  // 地球 e 很小(0.017), 近心角真实 103°
     texture:'./src/textures/earth.jpg',
     bumpMap:'./src/textures/earth_normal.jpg',
     cloudsTexture:'./src/textures/earth_clouds.jpg',
@@ -73,6 +77,7 @@ export const PLANETS = [
     name:'火星', en:'Mars', color:0xc1440e,
     distance:1.52, size:0.532, realSize:0.532, diameterKm:6779,
     orbit:687,  rotation:1.03, tilt:25.19, eccentricity:0.093,
+    inclination:0, perihelion:336,  // 火星 e 中等(0.093), 近心角真实 336° 视觉上跟水星/地球椭圆朝向错开
     texture:'./src/textures/mars.jpg',
     typeZh:'类地行星 · 岩石行星',
     typeEn:'Terrestrial · Rocky Planet',
@@ -87,6 +92,7 @@ export const PLANETS = [
     name:'木星', en:'Jupiter', color:0xd6a878,
     distance:5.20, size:11.21, realSize:11.209, diameterKm:139820,
     orbit:4333, rotation:0.41, tilt:3.13, eccentricity:0.048,
+    inclination:0, perihelion:15,  // 木星 e 较小(0.048), 近心角真实 15°
     texture:'./src/textures/jupiter.jpg',
     typeZh:'气态巨行星',
     typeEn:'Gas Giant',
@@ -101,6 +107,7 @@ export const PLANETS = [
     name:'土星', en:'Saturn', color:0xeacb8b,
     distance:9.58, size:9.45, realSize:9.449, diameterKm:116460,
     orbit:10759, rotation:0.45, tilt:26.73, eccentricity:0.054,
+    inclination:0, perihelion:92,  // 土星 e 较小(0.054), 近心角真实 92°
     texture:'./src/textures/saturn.jpg',
     ringTexture:'./src/textures/saturn_ring.jpg',
     ring:true,
@@ -118,6 +125,7 @@ export const PLANETS = [
     name:'天王星', en:'Uranus', color:0x9fd9e8,
     distance:19.20, size:4.01, realSize:4.007, diameterKm:50724,
     orbit:30687, rotation:-0.72, tilt:97.77, eccentricity:0.047,
+    inclination:0, perihelion:170,  // 天王星 e 较小(0.047), 近心角真实 170°
     texture:'./src/textures/uranus.jpg',
     ringTexture:'./src/textures/uranus_ring.jpg',
     ring:true, ringInner:2.4, ringOuter:3.2, ringColor:0x556677,
@@ -134,6 +142,7 @@ export const PLANETS = [
     name:'海王星', en:'Neptune', color:0x4060e0,
     distance:30.05, size:3.88, realSize:3.883, diameterKm:49244,
     orbit:60190, rotation:0.67, tilt:28.32, eccentricity:0.009,
+    inclination:0, perihelion:44,  // 海王星 e 极小(0.009), 近心角真实 44°
     texture:'./src/textures/neptune.jpg',
     typeZh:'冰巨行星',
     typeEn:'Ice Giant',

@@ -44,7 +44,9 @@ export function regenerateOrbits(scene) {
   const planetObjs = window.__planets;
   if (!planetObjs) return;
   planetObjs.forEach(o=>{
-    const line = makeOrbit(getDisplayDistance(o.data));
+    // v20260708: 椭圆轨道 — 传 eccentricity + perihelion
+    const p = o.data;
+    const line = makeOrbit(getDisplayDistance(p), p.eccentricity || 0, p.perihelion || 0);
     scene.add(line);
     _orbitLines.push(line);
   });

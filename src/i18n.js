@@ -33,6 +33,7 @@ const DICT = {
   star_bg:        ['星空背景',   'STARFIELD'],
   earth_clouds:   ['地球云层',   'EARTH CLOUDS'],
   sun_glow:       ['太阳辉光',   'SUN GLOW'],
+  asteroid_belt:  ['小行星带',   'ASTEROID BELT'],
 
   // hint (controls 面板内的快捷键说明)
   // v20260702e: CLICK → TRACE, 因为点星球=追踪, "CLICK" 没说明结果

@@ -259,17 +259,27 @@ export function initFloatingTools() {
   btn.setAttribute('title', '背景音乐 · 已关闭 (点击开启)');
 
   // 用户点击 toggle
-  btn.addEventListener('click', async () => {
-    const ambient = await import('./ambient.js');
-    const playing = await ambient.toggle();
-    btn.classList.toggle('playing', playing);
-    btn.setAttribute('aria-pressed', String(playing));
-    btn.setAttribute('title',
-      playing
-        ? '背景音乐 · 播放中 (点击关闭)'
-        : '背景音乐 · 已关闭 (点击开启)');
-  });
-}
+    // v20260708 修复: 动态 import + toggle() 都用 try/catch 包
+    // 根因: 移动端 importmap 动态 import 在 user-gesture handler 里可能 reject,
+    //   不 catch 整个 promise 就跳 script 错, 用户看到 console 报错
+    btn.addEventListener('click', async () => {
+      let playing = false;
+      try {
+        const ambient = await import('./ambient.js');
+        playing = await ambient.toggle();
+      } catch (e) {
+        console.warn('[ui] ambient toggle failed:', e.message);
+        // 失败时把按钮弹回关闭态, 不留"假播放"状态
+        playing = false;
+      }
+      btn.classList.toggle('playing', playing);
+      btn.setAttribute('aria-pressed', String(playing));
+      btn.setAttribute('title',
+        playing
+          ? '背景音乐 · 播放中 (点击关闭)'
+          : '背景音乐 · 已关闭 (点击开启)');
+    });
+  }
 
 /* 追踪徽章的"停止"按钮 */
 export function initTrackingStopButton() {

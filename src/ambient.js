@@ -28,36 +28,57 @@ let isStarted = false;     // 业务状态 (与 audio.paused 解耦)
 const FADE_IN_S  = 2.0;
 const FADE_OUT_S = 1.5;
 
-/* 懒创建 Audio 元素 + 绑事件 */
+/* 懒创建 Audio 元素 + 绑事件
+ * v20260708 修复: try/catch 包裹 new Audio() + 设属性
+ * 根因: 某些移动端浏览器 (iOS Safari WebView / Android Chrome WebView) 在 importmap
+ *   动态 import 出来的 module 里第一次调 `new Audio()` 时, 触发 autoplay policy 检查,
+ *   若构造抛错 (或 src 解析失败) 整个 click handler 跳错 → 表现为"点音乐按钮 script 错"
+ * 修法: 用 try/catch 包整个初始化, 失败返回 null 让 play() 静默 no-op
+ *      同时绝对路径化 src — 相对路径在某些深链/主屏图标/iframe 嵌入场景下解析失败
+ */
 function ensureAudio() {
   if (audio) return audio;
-  audio = new Audio('./src/audio/ambient.mp3');
-  audio.loop = true;        // 2:14 自动循环, 挂机无重复感
-  audio.preload = 'auto';   // 提前预加载, 点按钮时无延迟
-  audio.volume = 0;         // 起始 0, play() 时 fade-in 到 0.7
+  try {
+    // 用相对于 origin 的绝对 URL (window.location.origin + 路径), 不依赖 import.meta.url
+    // import.meta.url 在 importmap 重写后某些浏览器返回奇怪路径, 相对 './' 不稳
+    const src = new URL('src/audio/ambient.mp3', window.location.href).href;
+    audio = new Audio(src);
+    audio.loop = true;        // 2:14 自动循环, 挂机无重复感
+    audio.preload = 'auto';   // 提前预加载, 点按钮时无延迟
+    audio.volume = 0;         // 起始 0, play() 时 fade-in 到 0.7
+  } catch (e) {
+    console.warn('[ambient] ensureAudio failed (mobile webview?):', e.message);
+    audio = null;
+  }
   return audio;
 }
 
 /* fade 用线性插值, 简单稳 */
 function fadeTo(targetVol, duration) {
   if (!audio) return;
-  const startVol = audio.volume;
-  const startTime = performance.now();
-  const diff = targetVol - startVol;
-  // 取消上一次 fade
-  if (audio._fadeRaf) cancelAnimationFrame(audio._fadeRaf);
+  // fadeTo 调用时 audio.volume 在某些移动端首次构造后可能抛错
+  // (autoplay policy + user gesture 还没消费完), 包 try/catch 保护
+  try {
+    const startVol = audio.volume;
+    const startTime = performance.now();
+    const diff = targetVol - startVol;
+    // 取消上一次 fade
+    if (audio._fadeRaf) cancelAnimationFrame(audio._fadeRaf);
 
-  function step() {
-    const elapsed = (performance.now() - startTime) / 1000;
-    if (elapsed >= duration) {
-      audio.volume = targetVol;
-      audio._fadeRaf = null;
-      return;
+    function step() {
+      const elapsed = (performance.now() - startTime) / 1000;
+      if (elapsed >= duration) {
+        audio.volume = targetVol;
+        audio._fadeRaf = null;
+        return;
+      }
+      audio.volume = startVol + diff * (elapsed / duration);
+      audio._fadeRaf = requestAnimationFrame(step);
     }
-    audio.volume = startVol + diff * (elapsed / duration);
     audio._fadeRaf = requestAnimationFrame(step);
+  } catch (e) {
+    console.warn('[ambient] fadeTo failed:', e.message);
   }
-  audio._fadeRaf = requestAnimationFrame(step);
 }
 
 export function isPlaying() {

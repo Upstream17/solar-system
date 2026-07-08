@@ -257,21 +257,32 @@ export async function makeDistantGlow(sunR, camera, renderer) {
     tex = getWhiteGlowTex();
   }
   const mat = new THREE.SpriteMaterial({
-    map: tex,
-    color: 0xffe890,                // 更黄更亮染色 (暖黄)
-    transparent: true,
-    blending: THREE.NormalBlending, // alpha 覆盖, 不累积
-    depthWrite: false,
-    depthTest: false,               // ★ v5 fix: 跟 sun mesh 重合, depthTest=true 时被 sun 自己 depth 挡住
-    sizeAttenuation: true,          // ★ v5 关键: 用 sizeAttenuation 透视
-    opacity: 0,
-    toneMapped: false
-  });
-  const sp = new THREE.Sprite(mat);
-  sp.scale.setScalar(60);           // 占位, update 里每帧重算
-  sp.frustumCulled = false;         // 防剔除坑
-  sp.renderOrder = 9999;            // ★ 永远渲染在最前
-  sp.position.set(0, 0, 0);
+      map: tex,
+      color: 0xffe890,                // 更黄更亮染色 (暖黄)
+      transparent: true,
+      blending: THREE.NormalBlending, // alpha 覆盖, 不累积
+      depthWrite: false,
+      // v20260708 修复: depthTest=true (不是 false) + 默认 renderOrder
+      // 根因: 之前 depthTest:false + renderOrder:9999 → sprite 在 pmndrs composer 所有 pass
+      //   里都被画在最后, 包括 GodRaysEffect 的 lightSource mask, 导致 distantGlow 屏幕位置
+      //   被当成 godrays 新光源, godrays 从它向四周辐射, 光晕糊到周边 planet 屏幕位置
+      //   (用户报告: "LOD 贴图渲染在其他星球上方")
+      // 现在: depthTest=true + 默认 renderOrder=0
+      //   - sprite center z=0, sun mesh 表面 z≈±12u, sprite 比 mesh 表面更靠近相机
+      //     (相机在远处 +z, sun 朝向相机那面 z=+12 > sprite z=0), 所以 depthTest:true
+      //     不会被 sun 自己挡住 (v5 注释里说的"被 sun depth 挡住"实际不成立)
+      //   - renderOrder=0 让 godrays lightSource mask 仍以 sun mesh 为准, distantGlow
+      //     只是叠加在 sun mesh 屏幕位置上, 不再参与 godrays 散射源
+      depthTest: true,
+      sizeAttenuation: true,
+      opacity: 0,
+      toneMapped: false
+    });
+    const sp = new THREE.Sprite(mat);
+    sp.scale.setScalar(60);           // 占位, update 里每帧重算
+    sp.frustumCulled = false;         // 防剔除坑
+    // 不设 renderOrder — 用默认 0, 让 godrays lightSource 仍以 sun mesh 为准
+    sp.position.set(0, 0, 0);
 
   // 屏幕目标尺寸 (像素)
   const TARGET_PX = 48;            // 略大, 更醒目

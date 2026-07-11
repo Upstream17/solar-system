@@ -2,10 +2,10 @@
 
 > **给 AI 助手读的项目索引** — 跨会话续接时，先读这个文件就能掌握当前开发现状，不用重新探索。
 
-> **最后更新**：2026-07-11 (v20260711b 环真实化 commit & push 已完成)
-> **基线 commit**：见 `git log -1`（v20260711b 土星+天王星环按 NASA 真实比例重设 — A 环 74500/141000 km, ε 环 38940/51140 km）
-> **上一基线 commit**：`ff5fdda`（v20260711 JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道 + 天王星 ring 缩）
-> **再上一基线 commit**：`12a74aa`（v20260708 轨道 + 时间基线 — 椭圆轨道 + 小行星带 + 1× = 1 hour/sec + slider 上限 1000×）
+> **最后更新**：2026-07-11 (v20260711d 轨道对齐 commit & push 已完成)
+> **基线 commit**：见 `git log -1`（v20260711d 轨道段数统一 720 段 — 所有行星 Δθ=0.5° 视觉对齐外行星）
+> **上一基线 commit**：v20260711b（土星+天王星环按 NASA 真实比例重设 — A 环 74500/141000 km, ε 环 38940/51140 km）
+> **再上一基线 commit**：`ff5fdda`（v20260711 JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道 + 天王星 ring 缩）
 
 ---
 
@@ -232,7 +232,7 @@ solar-system/
 
 ## 4. 关键不变量（事实）
 
-- **基线 commit**：v20260711b（见 `git log -1`，土星+天王星环按 NASA 真实比例重设）
+- **基线 commit**：v20260711d（见 `git log -1`，轨道段数统一 720 段 — 视觉对齐外行星）
 | **太阳辉光当前方案**：`GodRaysEffect`（pmndrs 6.36.4，screen-space raymarched，永远启用，无 LOD 切档） |
 | **后处理顺序**：RenderPass → GodRaysEffect → BloomEffect（pmndrs EffectComposer 接管） |
 | **太阳材质**：`MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})` |
@@ -271,8 +271,9 @@ solar-system/
 | `1416789` | feat(time): 1× = 1 day/sec (D 方案, 自转/公转比例对齐真实, 地球年 6 分 5 秒) — **已被 b1a5aff 推翻** |
 | `b1a5aff` | feat(time): 1× = 1 hour/sec (C 方案) — 1× = 1 hour/s, 地球自转 24 sec, 公转 4 小时; 旧值 5 day/s → 1 day/s (D) → 1/24 day/s = 1 hour/s (C) |
 | `12a74aa` | **再上一基线 (v20260708 轨道+时间)** — slider max 100→125, 1000× 触达 (公式 (v-50)/25 不变, v=125 → 10^3 = 1000×); 1000× = 1000 hour/s = 41.7 day/s, 地球年 8.75 秒看完 |
-| `ff5fdda` | **上一基线 (v20260711 轨道+天文+UI)** — 8 行星换用 JPL Table 1 (J2000) a/e/I/ϖ/Ω 实现三维真轨道 + 每行星独立轨道色；`makeOrbit` 段数自适应 clamp(round(a/5000×256),256,2048)；`makeMoon` 新增 128 段椭圆 line (#48a9ff, 5.145°倾角) 作为 `moonOrbitTilt` 挂到 earth.pivot；删 `makeTextSprite/addLabel/sun label` + `toggle-labels` UI；天王星 ring 12.82u → 6.41u；camera 近距抖动用 LOD 8% 迟滞 |
-| **`v20260711b`** | **当前基线 (土星+天王星环按 NASA 真实比例重设)** — 之前土星 ring 3.5/6.5 把环放大了 3 倍 ("夸张的电影土星", 真实 A 环 74500/141000 km / 行星半径 60268 km = 1.24/2.34 倍 mesh 半径); 天王星 ring 1.4/1.6 把 ε 环缩进 mesh 里且只剩 0.2 倍半径宽 (真实 ε 环 38940/51140 km / 行星半径 25362 km = 1.54/2.02 倍 mesh 半径)。新环宽比 土星:天王星 = 1.10/0.48 = 2.29 倍 ≈ NASA 真实 2.15 倍 ✓ |
+| `ff5fdda` | **再上一基线 (v20260711 轨道+天文+UI)** — 8 行星换用 JPL Table 1 (J2000) a/e/I/ϖ/Ω 实现三维真轨道 + 每行星独立轨道色；`makeOrbit` 段数自适应 clamp(round(a/5000×256),256,2048)；`makeMoon` 新增 128 段椭圆 line (#48a9ff, 5.145°倾角) 作为 `moonOrbitTilt` 挂到 earth.pivot；删 `makeTextSprite/addLabel/sun label` + `toggle-labels` UI；天王星 ring 12.82u → 6.41u；camera 近距抖动用 LOD 8% 迟滞 |
+| `v20260711b` | **上一基线 (土星+天王星环按 NASA 真实比例重设)** — 之前土星 ring 3.5/6.5 把环放大了 3 倍 ("夸张的电影土星", 真实 A 环 74500/141000 km / 行星半径 60268 km = 1.24/2.34 倍 mesh 半径); 天王星 ring 1.4/1.6 把 ε 环缩进 mesh 里且只剩 0.2 倍半径宽 (真实 ε 环 38940/51140 km / 行星半径 25362 km = 1.54/2.02 倍 mesh 半径)。新环宽比 土星:天王星 = 1.10/0.48 = 2.29 倍 ≈ NASA 真实 2.15 倍 ✓ |
+| **`v20260711d`** | **当前基线 (轨道段数统一 720 段 — 视觉对齐外行星)** — 关键洞察: "折线感" 不取决于几何误差 ε, 取决于段间角 Δθ。Δθ=1.4° (256 段火星) → 视觉上像 256 边形, 肉眼看能数段; Δθ=0.4° (872 段海王星) → 像 872 边形看不出多边形。v20260711c 试过 "ε 一致" (n=π√R), 但火星仍 256 段 (被下限卡), 视觉仍粗糙。**改为 Δθ 一致 → 所有行星 720 段 → 视觉对齐外行星**。8 行星 segCounts 全部 720 (浏览器验证 ✓), 总段数 5760 (旧 7052 → v20260711c 3446 → v20260711d 5760); 海王星 ε=0.83u = 0.26 像素 (仍 < 1 像素 sub-pixel)。月球轨道 129 段未动 |
 | **WORKTREE v20260711** | **JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道** — `constants.js` 更新 8 行星 a/e/I/Ω/ϖ 为 JPL Table 1；新增 `orbitColor`；`planets.js` 增加 `getOrbitPosition` 统一轨道线与行星位置；`makeOrbit` 段数自适应 `clamp(round(a/5000×256),256,2048)`；删除 `makeTextSprite/addLabel/sun label`；`makeMoon` 新增 128 段椭圆 line (e=0.0549, 5.145°倾角) 作为 `moonOrbitTilt` 挂到 earth.pivot，色 #48a9ff opacity 0.4；UI 删 `toggle-labels` switch 与字典 `show_labels`。验证：node --check 通过；浏览器 nLabels=0, nOrbits=9, segCounts∈[256,2048], moonOrbit 半径 7.56-8.44 ✓ |
 
 **v20260707 distantGlow 设计过程教训**：

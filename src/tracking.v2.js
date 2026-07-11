@@ -301,13 +301,21 @@ function updateTrackingBadge() {
 }
 
 function updateLegendHighlight() {
-  document.querySelectorAll('#legend .item').forEach(el => {
-    if (focusTarget && el.dataset.name === focusTarget.userData.name) {
-      el.classList.add('tracking');
-    } else {
-      el.classList.remove('tracking');
-    }
-  });
+  // v20260712: 改用 window.__updateLegendHighlight (定义在 ui.js), 兼容分类/折叠/卫星组
+  // — 同时把当前 focusTarget 挂到 window.__focusTarget, 让 ui.js legend 能拿到
+  window.__focusTarget = focusTarget;
+  if (typeof window.__updateLegendHighlight === 'function') {
+    window.__updateLegendHighlight();
+  } else {
+    // 兜底: 旧逻辑,确保就算 ui.js 没加载也不报错
+    document.querySelectorAll('#legend .item').forEach(el => {
+      if (focusTarget && el.dataset.name === focusTarget.userData.name) {
+        el.classList.add('tracking');
+      } else {
+        el.classList.remove('tracking');
+      }
+    });
+  }
 }
 
 /* ESC 退出 */

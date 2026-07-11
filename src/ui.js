@@ -232,35 +232,142 @@ export function initInfoPanel() {
   });
 }
 
-/* 图例点击 = 切换追踪 */
+/* 图例 — 支持多星系统 (v20260712 重构)
+ * 结构:
+ *   - 太阳 (恒星)
+ *   - 行星 (按距太阳远近排序)
+ *   - 卫星分组 (按母行星分组,每个行星可折叠)
+ * - 滚动: panel-body 设 max-height + overflow-y:auto
+ * - 选中追踪: data-name 匹配 userData.name
+ */
 export function initLegend() {
   const legendList = $('legend-list');
   legendList.innerHTML = '';
-  const items = [];
-  if (window.__sun) items.push(window.__sun);
-  if (window.__planets) items.push(...window.__planets.map(o=>o.mesh));
-  if (window.__moon) items.push(window.__moon.mesh);
 
-  items.forEach(m=>{
-    const item = document.createElement('div');
-    item.className = 'item';
-    item.dataset.name = m.userData.name;
-    const color = m.userData.isSun ? '#ffcc55' :
-                  m.userData.data.color ? '#'+m.userData.data.color.toString(16).padStart(6,'0') : '#aaaaaa';
-    // v20260702e: 行星名双语并列 — 太阳 (Sun)
-    // — 优先从 userData.data.en 取 (行星); 太阳没 data, 走 userData.en
-    // — 兜底: 太阳的 en 在这里硬编码, 因为 planets.js 加载顺序有时序坑
-    const en = m.userData.data?.en || m.userData.en || (m.userData.isSun ? 'Sun' : '');
-    item.innerHTML = `<span class="dot" style="background:${color};color:${color}"></span>
-      <span class="name-zh">${m.userData.name}</span>${en ? `<span class="name-en">${en}</span>` : ''}`;
-    item.onclick = (e)=>{
-      e.stopPropagation();
-      // 修 #2: 再次点击同一目标不再取消，改为重新飞过去
-      startTracking(m, true);
-    };
-    legendList.appendChild(item);
+  // ===== 1. 太阳 (恒星) =====
+  if (window.__sun) {
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'legend-group';
+    groupHeader.textContent = '恒星 · STAR';
+    legendList.appendChild(groupHeader);
+    legendList.appendChild(makeLegendItem(window.__sun, true));
+  }
+
+  // ===== 2. 行星 =====
+  if (window.__planets && window.__planets.length) {
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'legend-group';
+    groupHeader.textContent = '行星 · PLANETS';
+    legendList.appendChild(groupHeader);
+    window.__planets.forEach(planetObj => {
+      legendList.appendChild(makeLegendItem(planetObj.mesh, false));
+    });
+  }
+
+  // ===== 3. 卫星分组 (按母行星) =====
+  if (window.__allMoons && window.__allMoons.length) {
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'legend-group';
+    groupHeader.textContent = `卫星 · MOONS (${window.__allMoons.length})`;
+    legendList.appendChild(groupHeader);
+
+    // 按母行星分组
+    const moonsByParent = {};
+    window.__allMoons.forEach(m => {
+      const pName = m.parentPlanet || m.data.parent || '未知';
+      if (!moonsByParent[pName]) moonsByParent[pName] = [];
+      moonsByParent[pName].push(m);
+    });
+
+    // 按 PLANETS 顺序遍历 (跟行星列表的视觉顺序对齐)
+    // 火星 → 木星 → 土星 → 天王星 → 海王星 → 地球 (月球按发现位置排在地球行星下)
+    const planetOrder = ['地球', '火星', '木星', '土星', '天王星', '海王星'];
+    const sortedParents = Object.keys(moonsByParent).sort((a, b) => {
+      const ai = planetOrder.indexOf(a); const bi = planetOrder.indexOf(b);
+      return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    });
+
+    sortedParents.forEach(parentName => {
+      const moons = moonsByParent[parentName];
+      // 折叠容器
+      const moonGroup = document.createElement('div');
+      moonGroup.className = 'moon-group';
+      const isOpen = localStorage.getItem(`moon_group_${parentName}`) !== '0';  // 默认展开
+      moonGroup.dataset.parent = parentName;
+      moonGroup.dataset.open = String(isOpen);
+
+      // 折叠 header
+      const header = document.createElement('div');
+      header.className = 'moon-group-header';
+      header.innerHTML = `<span class="chevron">${isOpen ? '▼' : '▶'}</span><span class="name">${parentName}</span><span class="count">(${moons.length})</span>`;
+      header.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cur = moonGroup.dataset.open === 'true';
+        moonGroup.dataset.open = String(!cur);
+        header.querySelector('.chevron').textContent = !cur ? '▼' : '▶';
+        body.style.display = !cur ? 'block' : 'none';
+        localStorage.setItem(`moon_group_${parentName}`, !cur ? '1' : '0');
+      });
+      moonGroup.appendChild(header);
+
+      // 折叠 body
+      const body = document.createElement('div');
+      body.className = 'moon-group-body';
+      body.style.display = isOpen ? 'block' : 'none';
+      moons.forEach(m => body.appendChild(makeLegendItem(m.mesh, false, parentName)));
+      moonGroup.appendChild(body);
+
+      legendList.appendChild(moonGroup);
+    });
+  }
+
+  // 应用 current tracking highlight (如果用户在追踪某天体)
+  if (window.__focusTarget) updateLegendHighlight();
+}
+
+/* 单个图例项 (复用): 太阳/行星/卫星同款 UI, 只是父级分组不同 */
+function makeLegendItem(mesh, isSun, parentHint = '') {
+  const item = document.createElement('div');
+  item.className = 'item';
+  item.dataset.name = mesh.userData.name;
+  item.dataset.parent = parentHint;  // 仅卫星用
+  const color = mesh.userData.isSun ? '#ffcc55' :
+                mesh.userData.data?.color ? '#'+mesh.userData.data.color.toString(16).padStart(6,'0') : '#aaaaaa';
+  const en = mesh.userData.data?.en || mesh.userData.en || (mesh.userData.isSun ? 'Sun' : '');
+  item.innerHTML = `<span class="dot" style="background:${color};color:${color}"></span>
+    <span class="name-zh">${mesh.userData.name}</span>${en ? `<span class="name-en">${en}</span>` : ''}`;
+  item.onclick = (e) => {
+    e.stopPropagation();
+    startTracking(mesh, true);
+  };
+  return item;
+}
+
+/* legend 高亮当前追踪目标 (在 tracking.v2.js updateLegendHighlight 调用)
+ * 改为 querySelector 整个 #legend-list (兼容分类结构)
+ */
+function updateLegendHighlight() {
+  // export 给 tracking.v2.js 用
+  const target = window.__focusTarget;
+  document.querySelectorAll('#legend-list .item').forEach(el => {
+    if (target && el.dataset.name === target.userData.name) {
+      el.classList.add('tracking');
+      // 自动展开父级 moon group (避免选中看不到)
+      const mg = el.closest('.moon-group');
+      if (mg && mg.dataset.open !== 'true') {
+        mg.dataset.open = 'true';
+        mg.querySelector('.moon-group-body').style.display = 'block';
+        mg.querySelector('.chevron').textContent = '▼';
+        localStorage.setItem(`moon_group_${mg.dataset.parent}`, '1');
+      }
+    } else {
+      el.classList.remove('tracking');
+    }
   });
 }
+
+// 暴露给 tracking.v2.js 调用
+window.__updateLegendHighlight = updateLegendHighlight;
 
 /* 浮动工具按钮 — GitHub 链接 + 背景音乐 toggle
  * — GitHub: 纯 <a target="_blank">, 不需要 JS

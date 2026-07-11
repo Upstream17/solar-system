@@ -512,30 +512,45 @@ export async function makePlanet(scene, p) {
   return { pivot, mesh, data:p, lod };
 }
 
-/* ===== 月球 (v20260708-B3: ShaderMaterial 方案) =====
+/* ===== 月球 / 卫星 工厂 (v20260712: 通用化 — 接受任意 moonData)
  * 改用 ShaderMaterial, 完全自己控制 vertex/fragment
  * - 顶点: 算 worldPos + normal, 写到 varying
  * - 片段: TEST 阶段直接红色, 验证 shader 跑
  * 复用: 任何卫星挂同款, tick 传 parent world position
+ *
+ * v20260712 重要变更:
+ *   - 不再硬编码 MOON/MOON.eccentricity/MOON.parent='地球'
+ *   - 接收任意 moonData, 所有参数从 data 读
+ *   - 返回的对象字段统一为 { pivot, mesh, data, moonOrbitTilt }
+ *   - 倾角也读自 moonData.inclination (火星倾角 ~1°, 木卫 0.05-0.5°, 海卫一 156.9° 逆向)
+ *   - shader uniforms: uSunPos, uParentPos, uParentR, uParentName 用于月食/日食计算
  */
-export async function makeMoon() {
-  const tex = await safeTexture(MOON.texture, 'moon', onLoaderTick);
-  const geo = new THREE.SphereGeometry(MOON.size, 32, 32);
+export async function makeMoon(moonData) {
+  const data = moonData;  // alias
+  const tex = await safeTexture(data.texture || './src/textures/moon.jpg', data.en || 'moon', onLoaderTick);
+  // 几何尺寸: 用 size (场景单位),根据显示需求调整分辨率 (小卫星少几何,大卫星多)
+  // realSize < 0.05 → 16 段; 0.05-0.3 → 24 段; > 0.3 → 32 段 (跟月球一致)
+  const _segs = data.size > 0.3 ? 32 : data.size > 0.05 ? 24 : 16;
+  const geo = new THREE.SphereGeometry(data.size, _segs, _segs);
 
   // uniforms 先建, mat.userData 引用它
   const eclipseUniforms = {
-    uSunPos:   { value: new THREE.Vector3(0, 0, 0) },
-    uEarthPos: { value: new THREE.Vector3() },
-    uEarthR:   { value: 1.0 },
+    uSunPos:    { value: new THREE.Vector3(0, 0, 0) },
+    uParentPos: { value: new THREE.Vector3() },
+    uParentR:   { value: 1.0 },
+    uParentName:{ value: data.parent || '' },
   };
 
   const mat = new THREE.ShaderMaterial({
     uniforms: {
-      uTex:      { value: tex },
-      uSunPos:   eclipseUniforms.uSunPos,
-      uEarthPos: eclipseUniforms.uEarthPos,
-      uEarthR:   eclipseUniforms.uEarthR,
-      uAmbient:  { value: 0.15 },
+      uTex:       { value: tex },
+      uSunPos:    eclipseUniforms.uSunPos,
+      uParentPos: eclipseUniforms.uParentPos,
+      uParentR:   eclipseUniforms.uParentR,
+      uParentName:eclipseUniforms.uParentName,
+      uAmbient:   { value: 0.15 },
+      // v20260712: 每颗卫星可以有自己的色调 (e.g. Io 黄, Europa 蓝白)
+      uTint:      { value: new THREE.Color(data.color || 0xffffff) },
     },
     vertexShader: `
       varying vec3 vWorldPos;
@@ -543,8 +558,6 @@ export async function makeMoon() {
       varying vec2 vUv;
       void main() {
         vUv = uv;
-        // v20260708: 用 mat3(modelMatrix) 算 world-space normal
-        //   之前用 normalMatrix (view-space), 跟 sunDir 不在同空间 → Lambert 错
         vWorldNormal = normalize(mat3(modelMatrix) * normal);
         vec4 worldPos = modelMatrix * vec4(position, 1.0);
         vWorldPos = worldPos.xyz;
@@ -554,53 +567,47 @@ export async function makeMoon() {
     fragmentShader: `
       uniform sampler2D uTex;
       uniform vec3 uSunPos;
-      uniform vec3 uEarthPos;
-      uniform float uEarthR;
+      uniform vec3 uParentPos;
+      uniform float uParentR;
+      uniform vec3 uTint;
       uniform float uAmbient;
       varying vec3 vWorldPos;
       varying vec3 vWorldNormal;
       varying vec2 vUv;
 
       void main() {
-        // 1. 采样月球纹理
+        // 1. 采样卫星纹理 + 色调混合 (tint 给每个卫星一点颜色感)
         vec3 albedo = texture2D(uTex, vUv).rgb;
+        albedo = mix(albedo, albedo * uTint, 0.25);  // 25% tint 混合
 
         // 2. 简单 Lambert 光照 (太阳是平行光, 在原点)
-        //   太阳方向 = 从月球指向太阳 (uSunPos - vWorldPos) 然后归一化
         vec3 lightDir = normalize(uSunPos - vWorldPos);
-        // v20260708: 用 vWorldNormal (跟 lightDir 都在 world space)
         vec3 N = normalize(vWorldNormal);
         float NdotL = max(dot(N, lightDir), 0.0);
 
-        // 3. 月球本影/半影计算 (B2 公式, 现在确定在跑)
-        //   axisDir = 太阳→地球 方向 (月食要背向太阳那一侧)
-        vec3 axisDir = normalize(uEarthPos - uSunPos);
-        //   月球到地球向量
-        vec3 moonFromEarth = vWorldPos - uEarthPos;
-        //   月球沿 sun-earth 轴的投影距离 (正=在地球背面=本影侧)
-        float projDist = dot(moonFromEarth, axisDir);
-        //   月球到轴的垂直距离
-        vec3 perpVec = moonFromEarth - projDist * axisDir;
+        // 3. 月食/本影/半影计算 — 当卫星进入母行星本影时
+        //   axisDir = 太阳→母行星 方向
+        vec3 axisDir = normalize(uParentPos - uSunPos);
+        //   卫星到母行星向量
+        vec3 moonFromParent = vWorldPos - uParentPos;
+        //   卫星沿 sun-parent 轴的投影距离 (正=在母行星背面=本影侧)
+        float projDist = dot(moonFromParent, axisDir);
+        //   卫星到轴的垂直距离
+        vec3 perpVec = moonFromParent - projDist * axisDir;
         float perpDist = length(perpVec);
-        //   本影截面半径 = 地球半径 (月球远, 本影锥近似不变)
-        float umbraR = uEarthR * 1.0;
-        //   本影因子: perpDist < umbraR → 1.0, perpDist > umbraR*1.5 → 0.0
+        //   本影截面半径 = 母行星半径 (卫星远, 本影锥近似不变)
+        float umbraR = uParentR * 1.0;
+        //   本影因子
         float umbraFactor = 1.0 - smoothstep(umbraR * 0.8, umbraR * 1.5, perpDist);
-        //   限制只在 projDist > 0 (月球在地球背面=本影侧) 时才生效
         umbraFactor *= step(0.0, projDist);
-        //   半影因子: 本影外渐变
+        //   半影因子
         float penumbraFactor = 1.0 - smoothstep(umbraR * 1.5, umbraR * 2.5, perpDist);
         penumbraFactor *= step(0.0, projDist);
         penumbraFactor *= (1.0 - umbraFactor);
 
-        // 4. 光照 (Lambert + ambient)
-        //   本影区: 光照被遮挡 → 极暗 (0.04 亮度, 只剩 ambient)
-        //   半影区: 光照减半
-        //   正常区: 标准 Lambert + ambient
-        // v20260708: 用户原话"变红其实不对, 只保留黑白变化" — 去掉色调, 只调亮度
+        // 4. 光照合成 — 标准 Lambert + ambient + 月食压暗
         float lightMult = NdotL * (1.0 - umbraFactor) * (1.0 - penumbraFactor * 0.5);
         lightMult += uAmbient;
-        // 本影区压暗到 0.04 (几乎黑, 模拟地球本影完全挡光)
         lightMult *= mix(1.0, 0.04, umbraFactor);
         vec3 finalColor = albedo * lightMult;
 
@@ -613,21 +620,31 @@ export async function makeMoon() {
   mat.userData.eclipseUniforms = eclipseUniforms;
 
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.userData = { isPlanet:true, data:MOON, name:MOON.name, en:MOON.en, typeZh:MOON.typeZh, typeEn:MOON.typeEn };
+  mesh.userData = { isPlanet:true, data:data, name:data.name, en:data.en, typeZh:data.typeZh, typeEn:data.typeEn };
 
   const pivot = new THREE.Object3D();
-  pivot.add(mesh);
-  mesh.position.set(MOON.distance, 0, 0);
+    // v20260712: 用两层 Object3D 嵌套
+    //   - outer pivot: 静态倾角 (绕 x 轴 = inclination)
+    //   - inner pivotOrbit: 公转旋转 (绕 y 轴 = 累积角)
+    //   - mesh 挂在 inner pivotOrbit 上,position.x = distance
+    // 这样保证: (a) 轨道平面倾斜 (b) 卫星在该倾斜平面内公转
+    const _inclRad = THREE.MathUtils.degToRad(data.inclination || 0);
+    if (Math.abs(_inclRad) > 1e-6) pivot.rotation.x = _inclRad;
+    const pivotOrbit = new THREE.Object3D();
+    pivot.add(pivotOrbit);
+    pivotOrbit.add(mesh);
+    mesh.position.set(data.distance, 0, 0);
 
-  // v20260711: 月球椭圆轨道 line — 渲染在 moon pivot 同级, 即作为 earth.pivot 的子节点
-  // — 用 MOON.distance × (1 - eccentricity²) / (1 + eccentricity·cos θ) 公式, 沿 0° 黄道倾角
-  // — 5.145° 倾角 (月轨相对黄道) 通过把这条 line 加到一个独立的 Object3D (orbitTilt) 下, 让 orbitTilt 旋转 5.145°
-  // — 月球 mesh 月相/位置由主循环单独更新 (radius / 旋转), 这里只画静态椭圆 line
+  // v20260711: 椭圆轨道 line — 渲染在 moon pivot 同级
+  // — 用 data.distance × (1 - eccentricity²) / (1 + eccentricity·cos θ) 公式, 沿 0° 黄道倾角
+  // — 倾角通过把这条 line 加到一个独立的 Object3D (orbitTilt) 下, 让 orbitTilt 旋转 inclination
   const orbitTilt = new THREE.Object3D();
-  orbitTilt.rotation.x = THREE.MathUtils.degToRad(5.145);
-  const moonE = MOON.eccentricity || 0;
-  const moonA = MOON.distance;
-  const moonSeg = 128;  // 月球轨道小, 半径 8u, 128 段弦长差 ≈ 8*(2π/128)³/24 ≈ 1e-3u
+  orbitTilt.rotation.x = THREE.MathUtils.degToRad(data.inclination || 0);
+  const moonE = data.eccentricity || 0;
+  const moonA = data.distance;
+  // 段数: 远轨道多用段,近轨道少用段
+  // moonSeg 是 OrbitLine 段数 (静态椭圆线),不是几何段数
+  const moonSeg = data.distance > 30 ? 192 : data.distance > 15 ? 144 : 128;
   const moonPts = [];
   for (let i = 0; i <= moonSeg; i++) {
     const th = (i / moonSeg) * Math.PI * 2;
@@ -635,11 +652,19 @@ export async function makeMoon() {
     moonPts.push(new THREE.Vector3(r * Math.cos(th), 0, r * Math.sin(th)));
   }
   const moonOrbitGeo = new THREE.BufferGeometry().setFromPoints(moonPts);
-  // 月球轨道色 = earth.orbitColor (0x48a9ff), 但更淡一点 (opacity 0.4)
-  const moonOrbitMat = new THREE.LineBasicMaterial({ color: 0x48a9ff, transparent: true, opacity: 0.4 });
+  // 月球轨道色 = data.color (e.g. 木卫用橙黄, 土卫用米黄), opacity 0.4
+  const moonOrbitMat = new THREE.LineBasicMaterial({ color: data.color || 0x48a9ff, transparent: true, opacity: 0.4 });
   const moonOrbit = new THREE.LineLoop(moonOrbitGeo, moonOrbitMat);
   moonOrbit.userData.isOrbit = true;
   orbitTilt.add(moonOrbit);
-  // — 把 orbitTilt 暴露给 main.js, 让 main.js 在 moon pivot 挂到 earth.pivot 后, 同样的 orbitTilt 也挂到 earth.pivot
-  return { pivot, mesh, data:MOON, moonOrbitTilt: orbitTilt };
+  // — 把 orbitTilt 暴露给 main.js, 让 main.js 在 moon pivot 挂到 planet.pivot 后, 同样的 orbitTilt 也挂到 planet.pivot
+    // — 同时返回 pivotOrbit (公转容器),让 main.js 设 pivotOrbit.rotation.y = 公转角
+    return { pivot, pivotOrbit, mesh, data:data, moonOrbitTilt: orbitTilt };
+  }
+
+/* 兼容旧 API: makeMoon() 无参时返回月球 (保持 main.js 现有调用)
+ * v20260712: 保留 backward-compat 让现有 earth moon 路径不变
+ */
+export async function makeEarthMoon() {
+  return makeMoon(MOON);
 }

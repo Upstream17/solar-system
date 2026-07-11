@@ -531,11 +531,92 @@
     text-transform: uppercase;
   }
   #legend-list .au {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--text-dim);
-    font-variant-numeric: tabular-nums;
-  }
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* v20260712: 图例分类 (恒星/行星/卫星) + 卫星按母行星折叠 */
+    #legend-list .legend-group {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 12px 8px 4px 8px;
+      border-bottom: 1px solid rgba(126, 182, 255, 0.06);
+      margin-top: 4px;
+      /* 第一个 group 不要上 margin */
+    }
+    #legend-list .legend-group:first-child {
+      padding-top: 4px;
+    }
+    #legend-list .moon-group {
+      margin-bottom: 2px;
+    }
+    #legend-list .moon-group-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      letter-spacing: 1px;
+      color: var(--text-mid);
+      transition: background var(--t-fast);
+      user-select: none;
+    }
+    #legend-list .moon-group-header:hover { background: rgba(126, 182, 255, 0.06); }
+    #legend-list .moon-group-header .chevron {
+      font-size: 8px;
+      color: var(--text-dim);
+      transition: transform var(--t-fast);
+      flex-shrink: 0;
+      width: 10px;
+      text-align: center;
+    }
+    #legend-list .moon-group-header .name {
+      flex: 1;
+      color: var(--accent);
+    }
+    #legend-list .moon-group-header .count {
+      color: var(--text-dim);
+      font-size: 9.5px;
+    }
+    #legend-list .moon-group-body {
+      /* padding-left 让卫星项缩进, 视觉上表明"附属" */
+      padding-left: 16px;
+      border-left: 1px solid rgba(126, 182, 255, 0.08);
+      margin-left: 12px;
+    }
+    /* 卫星 .item 字号稍小, 视觉上让出 "行星" */
+    #legend-list .moon-group-body .item {
+      padding: 4px 8px;
+      font-size: 10.5px;
+    }
+    #legend-list .moon-group-body .item .name-zh {
+      font-size: 10.5px;
+    }
+    #legend-list .moon-group-body .item .name-en {
+      font-size: 9px;
+    }
+
+    /* v20260712: panel-legend 的 panel-body 加 max-height + overflow-y:auto
+     * — 19 颗卫星 + 9 行星 + 1 太阳 = 29 项, 旧面板 280×~250 容纳不下
+     * — 设 max-height: 50vh, 超出滚动
+     * — 移动端 (<768px) 全宽, 不需要滚动
+     */
+    #panel-legend .panel-body {
+      max-height: 50vh;
+      overflow-y: auto;
+      /* 让滚动条样式跟全局一致 (::-webkit-scrollbar 已定义) */
+    }
+    @media (max-width: 768px) {
+      #panel-legend .panel-body { max-height: 40vh; }
+    }
 
   /* ==========================================================
    * Dock 内部的 Hint（操作提示）

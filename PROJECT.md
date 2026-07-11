@@ -2,16 +2,16 @@
 
 > **给 AI 助手读的项目索引** — 跨会话续接时，先读这个文件就能掌握当前开发现状，不用重新探索。
 
-> **最后更新**：2026-07-11 (v20260711d 轨道对齐 commit & push 已完成)
-> **基线 commit**：见 `git log -1`（v20260711d 轨道段数统一 720 段 — 所有行星 Δθ=0.5° 视觉对齐外行星）
-> **上一基线 commit**：v20260711b（土星+天王星环按 NASA 真实比例重设 — A 环 74500/141000 km, ε 环 38940/51140 km）
+> **最后更新**：2026-07-12 (v20260712 Moon System 扩展 — 19 颗新卫星 + 折叠图例 + 滚动)
+> **基线 commit**：见 `git log -1`（v20260712 多星系统 — 火星/木星/土星/天王星/海王星 主要卫星全部加入）
+> **上一基线 commit**：v20260711d（轨道段数统一 720 段 — 所有行星 Δθ=0.5° 视觉对齐外行星）
 > **再上一基线 commit**：`ff5fdda`（v20260711 JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道 + 天王星 ring 缩）
 
 ---
 
 ## 0. 一句话总览
 
-**纯前端 Three.js r160 太阳系 3D 模拟器**，8 大行星 + 月球，**真实 AU 比例轨道**（DIST_SCALE ×16），**零构建**（无 package.json / 无 node_modules），用 `<script type="importmap">` + unpkg CDN 引入依赖，部署在 **Cloudflare Pages**（`https://solarsystem.upstream.eu.cc/`）。
+**纯前端 Three.js r160 太阳系 3D 模拟器**，**8 大行星 + 20 颗卫星**（地球月球 + 火星 2 + 木星 5 + 土星 6 + 天王星 5 + 海王星 1），**真实 AU 比例轨道**（DIST_SCALE ×16），**零构建**（无 package.json / 无 node_modules），用 `<script type="importmap">` + unpkg CDN 引入依赖，部署在 **Cloudflare Pages**（`https://solarsystem.upstream.eu.cc/`）。
 
 **LOD 系统**：每行星动态阈值 `realSize × 384`（视觉 2px 距离）；远档用 4px sprite dot；近档用原 mesh（带贴图 + 环 + 云层）。**太阳永远 mesh + godrays**（删了 sun LOD 二档切档，避免 sprite 视觉跳变）。
 
@@ -273,7 +273,8 @@ solar-system/
 | `12a74aa` | **再上一基线 (v20260708 轨道+时间)** — slider max 100→125, 1000× 触达 (公式 (v-50)/25 不变, v=125 → 10^3 = 1000×); 1000× = 1000 hour/s = 41.7 day/s, 地球年 8.75 秒看完 |
 | `ff5fdda` | **再上一基线 (v20260711 轨道+天文+UI)** — 8 行星换用 JPL Table 1 (J2000) a/e/I/ϖ/Ω 实现三维真轨道 + 每行星独立轨道色；`makeOrbit` 段数自适应 clamp(round(a/5000×256),256,2048)；`makeMoon` 新增 128 段椭圆 line (#48a9ff, 5.145°倾角) 作为 `moonOrbitTilt` 挂到 earth.pivot；删 `makeTextSprite/addLabel/sun label` + `toggle-labels` UI；天王星 ring 12.82u → 6.41u；camera 近距抖动用 LOD 8% 迟滞 |
 | `v20260711b` | **上一基线 (土星+天王星环按 NASA 真实比例重设)** — 之前土星 ring 3.5/6.5 把环放大了 3 倍 ("夸张的电影土星", 真实 A 环 74500/141000 km / 行星半径 60268 km = 1.24/2.34 倍 mesh 半径); 天王星 ring 1.4/1.6 把 ε 环缩进 mesh 里且只剩 0.2 倍半径宽 (真实 ε 环 38940/51140 km / 行星半径 25362 km = 1.54/2.02 倍 mesh 半径)。新环宽比 土星:天王星 = 1.10/0.48 = 2.29 倍 ≈ NASA 真实 2.15 倍 ✓ |
-| **`v20260711d`** | **当前基线 (轨道段数统一 720 段 — 视觉对齐外行星)** — 关键洞察: "折线感" 不取决于几何误差 ε, 取决于段间角 Δθ。Δθ=1.4° (256 段火星) → 视觉上像 256 边形, 肉眼看能数段; Δθ=0.4° (872 段海王星) → 像 872 边形看不出多边形。v20260711c 试过 "ε 一致" (n=π√R), 但火星仍 256 段 (被下限卡), 视觉仍粗糙。**改为 Δθ 一致 → 所有行星 720 段 → 视觉对齐外行星**。8 行星 segCounts 全部 720 (浏览器验证 ✓), 总段数 5760 (旧 7052 → v20260711c 3446 → v20260711d 5760); 海王星 ε=0.83u = 0.26 像素 (仍 < 1 像素 sub-pixel)。月球轨道 129 段未动 |
+| `v20260711d` | **上一基线 (轨道段数统一 720 段 — 视觉对齐外行星)** — 关键洞察: "折线感" 不取决于几何误差 ε, 取决于段间角 Δθ。Δθ=1.4° (256 段火星) → 视觉上像 256 边形, 肉眼看能数段; Δθ=0.4° (872 段海王星) → 像 872 边形看不出多边形。v20260711c 试过 "ε 一致" (n=π√R), 但火星仍 256 段 (被下限卡), 视觉仍粗糙。**改为 Δθ 一致 → 所有行星 720 段 → 视觉对齐外行星**。8 行星 segCounts 全部 720 (浏览器验证 ✓), 总段数 5760 (旧 7052 → v20260711c 3446 → v20260711d 5760); 海王星 ε=0.83u = 0.26 像素 (仍 < 1 像素 sub-pixel)。月球轨道 129 段未动 |
+| **`v20260712`** | **当前基线 (Moon System 扩展 — 19 颗新卫星 + 图例折叠 + 滚动)** — 关键变更: (1) `constants.js` 新增 `MOONS[]` 数组 19 颗 (火星 2 + 木星 5 + 土星 6 + 天王星 5 + 海王星 1),数据全来自 NASA/JPL+Wikipedia,含 diameter/mass/orbit/eccentricity/inclination (含海卫一 -5.877d 逆向公转); (2) `planets.js` `makeMoon` 通用化,接收任意 `moonData`,通用 shader uniforms `uParentPos/uParentR/uTint` (替换原 `uEarthPos`),两层 Object3D 嵌套 (外层 pivot 静态倾角 + 内层 pivotOrbit 公转旋转); (3) `main.js` 主循环遍历 `window.__allMoons` 替代原单月球代码,每颗 moon 独立 tick 公转/自转/eclipse uniforms; (4) `ui.js` `initLegend` 重构:恒星/行星/卫星三级分组,卫星按母行星折叠 (chevron + 计数,localStorage 记忆状态),选中追踪自动展开父级 group; (5) `index.html` `#panel-legend .panel-body` max-height:50vh + overflow-y:auto,新增 `.legend-group`/`.moon-group`/`.moon-group-header`/`.moon-group-body` 样式。验证:20 颗全部加载 (1 月球 + 19 新),info panel 数据正确 (zh/en 双语),轨道+月食 shader uniforms 全部就绪,Triton 156.9° 倾角 + 逆向公转验证通过,0 JS 错误 |
 | **WORKTREE v20260711** | **JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道** — `constants.js` 更新 8 行星 a/e/I/Ω/ϖ 为 JPL Table 1；新增 `orbitColor`；`planets.js` 增加 `getOrbitPosition` 统一轨道线与行星位置；`makeOrbit` 段数自适应 `clamp(round(a/5000×256),256,2048)`；删除 `makeTextSprite/addLabel/sun label`；`makeMoon` 新增 128 段椭圆 line (e=0.0549, 5.145°倾角) 作为 `moonOrbitTilt` 挂到 earth.pivot，色 #48a9ff opacity 0.4；UI 删 `toggle-labels` switch 与字典 `show_labels`。验证：node --check 通过；浏览器 nLabels=0, nOrbits=9, segCounts∈[256,2048], moonOrbit 半径 7.56-8.44 ✓ |
 
 **v20260707 distantGlow 设计过程教训**：

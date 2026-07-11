@@ -119,7 +119,7 @@ export const PLANETS = [
     texture:'./src/textures/saturn.jpg',
     ringTexture:'./src/textures/saturn_ring.jpg',
     ring:true,
-    ringInner:3.5, ringOuter:6.5,
+    ringInner:1.24, ringOuter:2.34,
     typeZh:'气态巨行星 · 带环行星',
     typeEn:'Gas Giant · Ringed',
     factsZh:{ diameter:'116,460 km', mass:'5.68×10²⁶ kg', day:'10.7 小时', year:'29.46 年',
@@ -138,7 +138,7 @@ export const PLANETS = [
     texture:'./src/textures/uranus.jpg',
     ringTexture:'./src/textures/uranus_ring.jpg',
     // v20260711: 缩天王星 ring 外半径 (realSize*3.2 → 1.6) — 之前 12.8u ≈ 3 倍 mesh 直径, 近距镜头下会遮挡 mesh + 让人以为 mesh 偏离轨道
-    ring:true, ringInner:1.4, ringOuter:1.6, ringColor:0x556677,
+    ring:true, ringInner:1.54, ringOuter:2.02, ringColor:0x556677,
     typeZh:'冰巨行星',
     typeEn:'Ice Giant',
     factsZh:{ diameter:'50,724 km', mass:'8.68×10²⁵ kg', day:'17.2 小时 (逆向)', year:'84 年',

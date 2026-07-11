@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import * as Loader from './loader.js';
 import { initScene, updateStarsTime, updateStarPositions } from './scene.js';
 import { initLighting } from './lighting.js';
-import { makeSun, makePlanet, makeMoon, makeOrbit, makeAsteroidBelt, updateAsteroidBelt } from './planets.js';
+import { makeSun, makePlanet, makeMoon, makeAsteroidBelt, updateAsteroidBelt, getOrbitPosition, tickPlanetLODWithHysteresis } from './planets.js';
 import { scaleScene, getDisplayDistance } from './scale.js';
 import { initTracking, tickCameraAnim, tickTracking } from './tracking.v2.js';
 import {
@@ -73,10 +73,9 @@ async function init() {
       //   - 偏出 ≈ 8 * sin(23.44°) = 3.18 单位, 比本影截面 (1.0) 大很多 → 月球永远不进本影
       //   - pivot 没有 tilt, 月球绕黄道面内的圆周转 → perpDist 能到 0 → 月食发生
       planetObjs[2].pivot.add(moonObj.pivot);
+      // v20260711: 月球轨道 line 也挂到 earth.pivot — 用 moonOrbitTilt (含 5.145° 倾角 + 静态 128 段椭圆 line) 作为独立节点
+      planetObjs[2].pivot.add(moonObj.moonOrbitTilt);
       // v20260708: 月球轨道 5° 倾角 (绕 x 轴倾斜 — 让月球相对黄道面有倾角)
-      // 真实月球轨道相对黄道倾角 5.14°
-      // 月球轨道半径 8 × sin(5°) ≈ 0.70 单位 < 本影半径 1.0 → 月球仍能进本影
-      // v20260708: 月球轨道倾角 5.145° (NASA 真实值, 月球相对黄道面倾角)
       moonObj.pivot.rotation.x = THREE.MathUtils.degToRad(5.145);
     } catch (e) { console.error('moon failed:', e); }
     window.__moon = moonObj;
@@ -148,26 +147,24 @@ async function init() {
       if (window.__planets) {
         window.__planets.forEach(o=>{
           const p = o.data;
-          // v20260708: 椭圆公转
+          // v20260711: JPL 三维椭圆公转
           //   — semiMajor = p.distance × DIST_SCALE (世界单位)
           //   — e = p.eccentricity (从 PLANETS 读)
-          //   — ω = p.perihelion × π/180 (从 PLANETS 读)
+          //   — ϖ = p.perihelion, I = p.inclination, Ω = p.ascendingNode (J2000 黄道坐标)
           //   — 平近点角 M = elapsedDays × w (w = 2π / p.orbit, orbit 是地球日)
           //   — 用 M≈θ 简化(精度足够视觉, 避免开普勒迭代)
           //   — r(θ) = a(1-e²) / (1 + e·cos(θ))
           const w = (Math.PI*2) / p.orbit;
           const theta = elapsedDays * w;  // 真近点角近似
-          const a = getDisplayDistance(p);
-          const e = p.eccentricity || 0;
-          const omega = (p.perihelion || 0) * Math.PI / 180;
-          const r = a * (1 - e*e) / (1 + e * Math.cos(theta));
-          const xEll = r * Math.cos(theta);
-          const yEll = r * Math.sin(theta);
-          // 旋 ω 到世界坐标
-          const cosO = Math.cos(omega), sinO = Math.sin(omega);
-          const wx = xEll * cosO - yEll * sinO;
-          const wz = xEll * sinO + yEll * cosO;
-          o.pivot.position.set(wx, 0, wz);
+          getOrbitPosition(
+            getDisplayDistance(p),
+            p.eccentricity || 0,
+            p.perihelion || 0,
+            p.inclination || 0,
+            p.ascendingNode || 0,
+            theta,
+            o.pivot.position
+          );
           // 自转
           const ws = (Math.PI*2) / (p.rotation || 1);
           o.mesh.rotation.y += deltaSim * SIM_DAYS_PER_SEC * ws * 0.02;
@@ -176,44 +173,21 @@ async function init() {
             o.mesh.userData.cloudsMesh.rotation.y -= deltaSim * SIM_DAYS_PER_SEC * ws * 0.025;
           }
         });
-        // v20260707 v3: label 屏幕像素尺寸固定 (8~24 px) + LOD 远档小点屏幕 24px
-        // 关键: 验证 SpriteMaterial + CanvasTexture 在 pmndrs composer 下能正常渲染
-        // 公式: 屏幕 px = (scale.y / camDist) * (canvasH / 2 / tan(fov/2))
-        //   → scale.y = targetPx * camDist * 2 * tan(fov/2) / canvasH
+        // v20260711: 删 3D label — 主循环里不再 compute label scale
+        // — 行星名通过图例 (BODIES panel) + 信息面板 (info-panel) 显示
+        // — 8 行星/Sun 的 Sprite 文字标签已从 planets.js 移除, 这里不需要 _allLabels 收集
         if (camera && window.__renderer) {
           const _v = new (camera.position.constructor)();
           const _fovRad = camera.fov * Math.PI / 180;
           const _canvasH = window.__renderer.domElement.height;
           const _halfWorldPerPx = (2 * Math.tan(_fovRad / 2)) / _canvasH;
-          // 遍历所有 isLabel 标记的 mesh (子节点 + scene 顶层 sun label)
-          const _allLabels = [];
-          window.__planets.forEach(o => {
-            // LOD 内部 mesh 的 children (label) 才能被找到
-            o.lod && o.lod.traverse(c => { if (c.userData && c.userData.isLabel) _allLabels.push({label: c, parent: o.data}); });
-          });
-          if (window.__sun) {
-            window.__sun.traverse(c => { if (c.userData && c.userData.isLabel) _allLabels.push({label: c, parent: null}); });
-          }
-          _allLabels.forEach(({label, parent}) => {
-            label.getWorldPosition(_v);
-            const camDist = camera.position.distanceTo(_v);
-            const base = parent ? parent.realSize : 12.0;
-            const minPx = 8;
-            const maxPx = 24 * Math.max(1, base);
-            const refDist = base * 50;
-            const t = Math.max(0, Math.min(1, camDist / refDist));
-            const targetPx = maxPx + (minPx - maxPx) * t;
-            // canvas 256x64 (4:1), sprite 4:1 宽高比
-            const sH = targetPx * camDist * _halfWorldPerPx;
-            label.scale.set(sH * 4, sH, 1);
-          });
-          // LOD update: 每帧检查每个行星距相机距离, 决定 mesh 还是 dot
-          // 同时给远档 dot 算屏幕 4px scale (小于太阳视觉 5.5px, 符合"远观小亮点")
+          // LOD 切换: 用迟滞版 (v20260711) — 阈值边界 8% 死区, 减少高速下的视觉抽动
           window.__planets.forEach(o => {
             if (!o.lod) return;
-            o.lod.update(camera);
+            tickPlanetLODWithHysteresis(o.lod, camera);
+            // 远档 dot scale: 只在远档 active 时重算, 避免每秒做 8 次无谓计算
             o.lod.levels.forEach(entry => {
-              if (entry.object.isSprite && entry.object !== o.mesh) {
+              if (entry.object.isSprite && entry.object !== o.mesh && entry.object.visible) {
                 o.lod.getWorldPosition(_v);
                 const camDist = camera.position.distanceTo(_v);
                 const sPx = 4;  // 屏幕 4px (默认相机下太阳视觉约 5.5px, dot 应更小)

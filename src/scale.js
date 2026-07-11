@@ -44,9 +44,16 @@ export function regenerateOrbits(scene) {
   const planetObjs = window.__planets;
   if (!planetObjs) return;
   planetObjs.forEach(o=>{
-    // v20260708: 椭圆轨道 — 传 eccentricity + perihelion
+    // v20260711: JPL 三维椭圆轨道 — e + ϖ + I + Ω + 独立轨道颜色
     const p = o.data;
-    const line = makeOrbit(getDisplayDistance(p), p.eccentricity || 0, p.perihelion || 0);
+    const line = makeOrbit(
+      getDisplayDistance(p),
+      p.eccentricity || 0,
+      p.perihelion || 0,
+      p.inclination || 0,
+      p.ascendingNode || 0,
+      p.orbitColor || p.color || 0x335577
+    );
     scene.add(line);
     _orbitLines.push(line);
   });
@@ -63,10 +70,9 @@ export function scaleScene(scene, camera, controls) {
 
   // 辉光 Sprite 已通过 sizeAttenuation 自适应相机距离，无需手动控制
 
-  // 行星：geometry 已用 realSize 创建，无需 scale
+  // 行星：geometry 已用 realSize 创建，无需 scale；tick 会立刻按三维轨道重写位置
   planetObjs.forEach(o=>{
     o.mesh.scale.setScalar(1.0);
-    o.pivot.position.setLength(getDisplayDistance(o.data));
   });
 
   // 月球

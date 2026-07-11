@@ -29,7 +29,6 @@ const DICT = {
 
   // dashboard toggles
   show_orbits:    ['显示轨道',   'SHOW ORBITS'],
-  show_labels:    ['显示星标',   'SHOW LABELS'],
   star_bg:        ['星空背景',   'STARFIELD'],
   earth_clouds:   ['地球云层',   'EARTH CLOUDS'],
   sun_glow:       ['太阳辉光',   'SUN GLOW'],

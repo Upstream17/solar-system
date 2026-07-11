@@ -9,79 +9,85 @@ import { tick as loaderTick } from './loader.js';
 // 进度回调：每个纹理加载完调用一次，让 loader 显示 "X / N"
 const onLoaderTick = (label) => loaderTick(label);
 
-/* 文字标签（Canvas 渲染 → Sprite） */
-// v20260707: 改用 MeshBasicMaterial + PlaneGeometry 替代 Sprite
-// 原因: pmndrs EffectComposer 不渲染 Sprite (实测不显示)
-// - MeshBasicMaterial 不受光照影响, 红色/绿色等纯色正常显示
-// - PlaneGeometry 渲染 quad, 加 CanvasTexture 当文字贴图
-// - tick 里手动设 mesh.quaternion = camera.quaternion 做 billboard
-/* 文字标签（Canvas 渲染 → Sprite）
- * v20260707 v2: 改用 tick 按相机距离动态算 scale (基线 6×1.5 太大, 真实化后 1.5×0.375 太小)
- *             — SpriteMaterial + CanvasTexture 在 pmndrs composer 下验证可正常渲染
- *             — tick 里把 label 屏幕像素尺寸固定在 [8, 24] px
- *             — 拉近: maxPx 限制, 不会盖住行星
- *             — 拉远: minPx 限制, 不会缩到 0
+/* v20260711: 删 3D label — makeTextSprite / addLabel 整个移除
+ * — 行星名通过图例 (BODIES panel) + 信息面板 (info-panel) 显示
+ * — 3D 场景不再叠加 Sprite 文字标签, 视觉更干净
  */
-function makeTextSprite(text, color='#9bd0ff') {
-  const c = document.createElement('canvas');
-  c.width = 256; c.height = 64;
-  const ctx = c.getContext('2d');
-  ctx.font = 'bold 28px sans-serif';
-  ctx.fillStyle = color;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = '#000';
-  ctx.shadowBlur = 6;
-  ctx.fillText(text, 128, 32);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map:tex, transparent:true, depthTest:false, toneMapped: false });
-  const sprite = new THREE.Sprite(mat);
-  // v20260707: 占位, tick 里按相机距离动态算 (8~24 px)
-  sprite.scale.set(0.1, 0.025, 1);
-  sprite.userData.isLabel = true;
-  return sprite;
-}
 
-function addLabel(parent, text, yOffset, sceneRef) {
-  const s = makeTextSprite(text);
-  s.position.set(0, yOffset || 2, 0);
-  parent.add(s);
-  return s;
-}
-
-/* 轨道线（椭圆）v20260708
- * 接收 a=semiMajor + eccentricity + perihelion(度)
- * 公式: r(θ) = a(1-e²) / (1 + e·cos(θ-ω))  θ 从近心点起算
- *       x = r·cos(θ), z = r·sin(θ)  (贴黄道面 y=0)
- * 太阳在椭圆焦点(0,0,0), 焦点距中心 = a·e
- * — 默认 e=0 (正圆) 时退化为半径 a 的圆
- * — 8 颗行星 inclination 全部 0, 保持黄道面对齐
+/* ===== 小行星带 (v20260708) =====
+ * 接收 a=semiMajor + eccentricity + longitudeOfPerihelion(ϖ) + inclination(I) + node(Ω)
+ * 公式: r(θ) = a(1-e²) / (1 + e·cosθ)，θ 从近日点起算，太阳在椭圆焦点
+ * 三维姿态: 先在轨道平面求 (x', y')，再按 JPL 公式用 Ω / I / ω=ϖ-Ω 转到黄道坐标
+ * Three.js 世界坐标映射: world.x=ecliptic.x, world.z=ecliptic.y, world.y=ecliptic.z
  */
-export function makeOrbit(distance, eccentricity = 0, perihelion = 0) {
-  const seg = 256;
+export function getOrbitPosition(
+  distance,
+  eccentricity = 0,
+  longitudeOfPerihelion = 0,
+  inclination = 0,
+  longitudeOfAscendingNode = 0,
+  theta = 0,
+  target = new THREE.Vector3()
+) {
   const a = distance;
   const e = eccentricity;
-  const omega = perihelion * Math.PI / 180;  // 弧度
+  const varpi = THREE.MathUtils.degToRad(longitudeOfPerihelion);
+  const inc = THREE.MathUtils.degToRad(inclination);
+  const node = THREE.MathUtils.degToRad(longitudeOfAscendingNode);
+  const argPeri = varpi - node;
+
+  const r = a * (1 - e * e) / (1 + e * Math.cos(theta));
+  const xPrime = r * Math.cos(theta);
+  const yPrime = r * Math.sin(theta);
+
+  const cosO = Math.cos(node), sinO = Math.sin(node);
+  const cosI = Math.cos(inc),  sinI = Math.sin(inc);
+  const cosW = Math.cos(argPeri), sinW = Math.sin(argPeri);
+
+  // JPL 近似行星位置公式：轨道平面 → J2000 黄道坐标
+  const xEcl = (cosW * cosO - sinW * sinO * cosI) * xPrime
+             + (-sinW * cosO - cosW * sinO * cosI) * yPrime;
+  const yEcl = (cosW * sinO + sinW * cosO * cosI) * xPrime
+             + (-sinW * sinO + cosW * cosO * cosI) * yPrime;
+  const zEcl = (sinW * sinI) * xPrime + (cosW * sinI) * yPrime;
+
+  return target.set(xEcl, zEcl, yEcl);
+}
+
+export function makeOrbit(
+  distance,
+  eccentricity = 0,
+  longitudeOfPerihelion = 0,
+  inclination = 0,
+  longitudeOfAscendingNode = 0,
+  color = 0x335577
+) {
+  // v20260711: 段数随轨道半长轴自适应 — 在小轨道 (2500u 水星) 上 256 段足够
+  //   海王星半长轴 77645u, 弦长差 ≈ a * (Δθ)³/24 = 77645 * 6.1e-7 ≈ 0.047u (>1 像素)
+  //   让 seg = clamp(round(a/5000 * 256), 256, 2048)
+  //   — 水星/金星/地球/火星: 256 段
+  //   — 木星 13313u → 681 → clamp 上限 2048 ... 但 1024 已经弦长差 < 0.2u, 故封顶 2048
+  //   — 天王星 51445u → 2633 → 2048
+  //   — 海王星 77645u → 3975 → 2048
+  const seg = Math.max(256, Math.min(2048, Math.round((distance / 5000) * 256)));
   const pts = [];
-  for (let i=0;i<=seg;i++){
-    const theta = (i/seg)*Math.PI*2;  // 真近点角(从近心点起算)
-    // 太阳在焦点, 椭圆中心在 (-a*e*cos(ω), 0, -a*e*sin(ω))
-    // 行星位置 = 椭圆中心 + 极坐标 (r, θ) 旋转到世界坐标系
-    const r = a * (1 - e*e) / (1 + e * Math.cos(theta));
-    // 椭圆"极坐标"以近心点为 0, 在椭圆局部: x_ell = r*cos(θ), y_ell = r*sin(θ)
-    // 旋转 ω 把近心点旋到世界 +X 方向(因为 θ=0 时 cos=1, r=a(1-e))
-    const xEll = r * Math.cos(theta);
-    const yEll = r * Math.sin(theta);
-    // 旋转 ω: world.x = xEll*cos(ω) - yEll*sin(ω), world.z = xEll*sin(ω) + yEll*cos(ω)
-    const wx = xEll * Math.cos(omega) - yEll * Math.sin(omega);
-    const wz = xEll * Math.sin(omega) + yEll * Math.cos(omega);
-    pts.push(new THREE.Vector3(wx, 0, wz));
+  for (let i = 0; i <= seg; i++) {
+    const theta = (i / seg) * Math.PI * 2;  // 真近点角(从近日点起算)
+    pts.push(getOrbitPosition(
+      distance,
+      eccentricity,
+      longitudeOfPerihelion,
+      inclination,
+      longitudeOfAscendingNode,
+      theta
+    ).clone());
   }
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
-  const mat = new THREE.LineBasicMaterial({ color:0x335577, transparent:true, opacity:0.45 });
+  const mat = new THREE.LineBasicMaterial({ color, transparent:true, opacity:0.55 });
   const line = new THREE.LineLoop(geo, mat);
   line.userData.isOrbit = true;
+  line.userData.orbitColor = color;
+  line.userData.inclination = inclination;
   return line;
 }
 
@@ -89,8 +95,7 @@ export function makeOrbit(distance, eccentricity = 0, perihelion = 0) {
  * 2000 颗 Points, 分布 2.1-3.3 AU (火星 1.52 ↔ 木星 5.20 之间)
  * 每颗: 随机 semiMajor(2.1-3.3) + 随机 ecc(0.05-0.2) + 随机 perihelion + 随机 inclination(±10°)
  * — 真实小行星带特征: 偏心率分散 + 倾角分散
- * — 远档 LOD: opacity 0.15 (雾带感, 不抢戏)
- * — 近档 LOD: opacity 0.6 (清晰小点, 个体可辨)
+ * — 固定 opacity 0.7：不做距离 LOD 渐变，避免远观 α 累积反成实心带
  * — 每帧更新位置 (公转), 主带平均周期 ~3-5 年
  *
  * 性能: 1 draw call, BufferGeometry 2000 顶点, 移动端 60 fps 无压力
@@ -275,7 +280,15 @@ function makePlanetDot(color) {
  * - 近档: 原 mesh (带贴图, 适合近距离观察)
  * - 远档: makePlanetDot 屏幕 24px 小点 (适合远距离观察)
  * 阈值: 距行星 > 500 单位用远档
+ *
+ * v20260711: 加 LOD 迟滞窗口（避免高速时间下 planet 在阈值边界来回切换导致视觉抖动）
+ *   — default LOD 切换是“距 > threshold 立即切远档、距 < threshold 立即切近档”
+ *   — 在轨道上 instant jump 时相机本身不动，但 when 相机在阈值边界附近，进/出带状区域会出现"咯瞪"跳变
+ *   — 加 8% 的迟滞：进入远档的条件是 camDist > threshold×1.08；返航近档的条件是 camDist < threshold×0.92
+ *   — 进入阈值后切换状态，给下一帧 tick 查到
  */
+const _lodHysteresisUp   = 1.08;   // camDist > threshold * up   → 切到远档 sprite dot
+const _lodHysteresisDown = 0.92;   // camDist < threshold * down → 切到近档 mesh
 export function makePlanetWithLOD(mesh, color, realSize) {
   // LOD 节点
   // 阈值含义: addLevel(distance) 的 distance 是"相机到这个 LOD 节点世界坐标"的距离（世界单位）
@@ -302,8 +315,44 @@ export function makePlanetWithLOD(mesh, color, realSize) {
   // 近档: 原 mesh
   lod.addLevel(mesh, 0);
   lod.userData.isPlanetLOD = true;
+  lod.userData.lodThreshold = threshold;
+  lod.userData.lodHysteresisUp   = _lodHysteresisUp;
+  lod.userData.lodHysteresisDown = _lodHysteresisDown;
   return lod;
 }
+
+/* v20260711: 带迟滞的 LOD update — 取代 o.lod.update(camera)
+ *   — 以“上一次在近档吗”为状态机，距离跨越 up 阈值才切远档，跨越 down 阈值才切近档
+ *   — main.js tick 里调用本函数代替 lod.update(camera)
+ *   — 减少高速公转下 LOD 抽动
+ */
+export function tickPlanetLODWithHysteresis(lod, camera) {
+  if (!lod || !lod.userData?.isPlanetLOD) {
+    lod.update(camera);
+    return;
+  }
+  const t = lod.userData.lodThreshold;
+  const up = lod.userData.lodHysteresisUp;
+  const down = lod.userData.lodHysteresisDown;
+  const isNear = !lod.userData.lodIsFar;  // 初始默认近档 (level 0 = mesh)
+  // 距 LOD 节点的距离
+  lod.getWorldPosition(_lodTmpVec);
+  const camDist = camera.position.distanceTo(_lodTmpVec);
+  if (isNear) {
+    if (camDist > t * up) {
+      lod.userData.lodIsFar = true;
+      lod.levels[1].object.visible = true;   // 远档 sprite dot
+      lod.levels[0].object.visible = false;  // 近档 mesh
+    }
+  } else {
+    if (camDist < t * down) {
+      lod.userData.lodIsFar = false;
+      lod.levels[1].object.visible = false;  // 远档 sprite dot
+      lod.levels[0].object.visible = true;   // 近档 mesh
+    }
+  }
+}
+const _lodTmpVec = new THREE.Vector3();
 
 /* ===== 太阳 ===== */
 export async function makeSun(scene, camera, renderer) {
@@ -330,24 +379,10 @@ export async function makeSun(scene, camera, renderer) {
     factEn:SUN_FACTS.factEn };
   scene.add(mesh);
 
-  // 4 层 Sprite 辉光（halo / corona / glow / aura）— 已废弃
-  // — 原因：GodRaysEffect 接管了"中心辐射"视觉效果
-  // — sprite 4 层叠加看起来是"同心球层"，分界明显
-  // — 而且 baseScale 2.8×SUN_R ≈ 33.6u ≈ 水星轨道 (d=31.2) — 把水星轨道包进去了
-  // — godrays 是 screen-space raymarched，从屏幕中心平滑扩散，没有球层分界
-  // — 保留代码（makeSunGlow 在 lighting.js 里）但不调用，方便以后想用再恢复
-  // const glow = makeSunGlow(SUN_R);
-  // mesh.add(glow.group);
-  // glow.sprites.forEach(s => sunGlowSprites.push(s));
-// mesh.userData.glowUpdate = glow.update;
-
-  // sun label 单独 add 到 scene，不放进 sun mesh 子节点树
-    // 原因：GodRaysEffect 把 sun mesh 当 lightSource 时，整棵子树都算 lightSource
-    //        如果 label 在子节点里，会被 godrays 当成"光"渲染（label 也会发光）
-    const label = makeTextSprite('☀ 太阳', '#fff5d8');
-    label.position.set(0, 1.5 * SUN_R, 0);
-    scene.add(label);
-    /* v20260707 v5: 远日轨道占位亮星 (LOD + 屏幕固定 60px via 距离反推)
+  // v20260711: 删 3D label — 不再给 sun 加文字标签
+  // — 行星/Sun 名称通过图例 (BODIES panel) + 信息面板显示
+  // — 此前 sun label 单独 add 到 scene（不放进 sun mesh 子节点树）的逻辑也移除
+  /* v20260707 v5: 远日轨道占位亮星 (LOD + 屏幕固定 60px via 距离反推)
      *  - 内行星带 + 火星以内 (D < 4000u) 不渲染
      *  - 火星→木星 (4000-13000u) 渐入
      *  - 木星及之外 (D > 13000u) 满显
@@ -460,7 +495,7 @@ export async function makePlanet(scene, p) {
     mesh.userData.cloudsMesh = cloudsMesh;
   }
 
-  addLabel(mesh, p.name, p.realSize * 1.6);
+  // v20260711: 删 3D label — addLabel 函数已移除, 不再调用
   return { pivot, mesh, data:p, lod };
 }
 
@@ -570,5 +605,28 @@ export async function makeMoon() {
   const pivot = new THREE.Object3D();
   pivot.add(mesh);
   mesh.position.set(MOON.distance, 0, 0);
-  return { pivot, mesh, data:MOON };
+
+  // v20260711: 月球椭圆轨道 line — 渲染在 moon pivot 同级, 即作为 earth.pivot 的子节点
+  // — 用 MOON.distance × (1 - eccentricity²) / (1 + eccentricity·cos θ) 公式, 沿 0° 黄道倾角
+  // — 5.145° 倾角 (月轨相对黄道) 通过把这条 line 加到一个独立的 Object3D (orbitTilt) 下, 让 orbitTilt 旋转 5.145°
+  // — 月球 mesh 月相/位置由主循环单独更新 (radius / 旋转), 这里只画静态椭圆 line
+  const orbitTilt = new THREE.Object3D();
+  orbitTilt.rotation.x = THREE.MathUtils.degToRad(5.145);
+  const moonE = MOON.eccentricity || 0;
+  const moonA = MOON.distance;
+  const moonSeg = 128;  // 月球轨道小, 半径 8u, 128 段弦长差 ≈ 8*(2π/128)³/24 ≈ 1e-3u
+  const moonPts = [];
+  for (let i = 0; i <= moonSeg; i++) {
+    const th = (i / moonSeg) * Math.PI * 2;
+    const r = moonA * (1 - moonE * moonE) / (1 + moonE * Math.cos(th));
+    moonPts.push(new THREE.Vector3(r * Math.cos(th), 0, r * Math.sin(th)));
+  }
+  const moonOrbitGeo = new THREE.BufferGeometry().setFromPoints(moonPts);
+  // 月球轨道色 = earth.orbitColor (0x48a9ff), 但更淡一点 (opacity 0.4)
+  const moonOrbitMat = new THREE.LineBasicMaterial({ color: 0x48a9ff, transparent: true, opacity: 0.4 });
+  const moonOrbit = new THREE.LineLoop(moonOrbitGeo, moonOrbitMat);
+  moonOrbit.userData.isOrbit = true;
+  orbitTilt.add(moonOrbit);
+  // — 把 orbitTilt 暴露给 main.js, 让 main.js 在 moon pivot 挂到 earth.pivot 后, 同样的 orbitTilt 也挂到 earth.pivot
+  return { pivot, mesh, data:MOON, moonOrbitTilt: orbitTilt };
 }

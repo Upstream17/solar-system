@@ -63,15 +63,15 @@ export function initSliders(sunLight) {
 /* 显示开关 */
 export function initToggles(scene, camera, controls) {
   const toggleOrbits   = $('toggle-orbits');
-  const toggleLabels   = $('toggle-labels');
   const toggleBloom    = $('toggle-bloom');
 
   toggleOrbits.addEventListener('change', ()=>{
     scene.traverse(o=>{ if (o.userData?.isOrbit) o.visible = toggleOrbits.checked; });
   });
-  toggleLabels.addEventListener('change', ()=>{
-    scene.traverse(o=>{ if (o.userData?.isLabel) o.visible = toggleLabels.checked; });
-  });
+
+  // v20260711: 删 3D label — toggle UI 节点已拆, 不再有 addEventListener
+  // — 行星名通过图例 (BODIES panel) + 信息面板 (info-panel) 展示
+  // — 3D 场景渲染天体几何即可, 不再叠加 Sprite 文字标签
 
   // 辉光开关：调用 lighting.js 的 setGlowEnabled() 设置全局标志
   // — 由主循环 glowUpdate() 每帧检查这个标志，避免 per-frame 覆盖 visible

@@ -2,8 +2,9 @@
 
 > **给 AI 助手读的项目索引** — 跨会话续接时，先读这个文件就能掌握当前开发现状，不用重新探索。
 
-> **最后更新**：2026-07-08
-> **基线 commit**：`12a74aa`（v20260708 轨道 + 时间基线 — 椭圆轨道 + 小行星带 + 1× = 1 hour/sec + slider 上限 1000×）
+> **最后更新**：2026-07-11
+> **基线 commit**：`<NEW>`（v20260711 JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道 + 天王星 ring 缩）— 待 commit 后回填
+> **上一基线 commit**：`12a74aa`（v20260708 轨道 + 时间基线 — 椭圆轨道 + 小行星带 + 1× = 1 hour/sec + slider 上限 1000×）
 
 ---
 
@@ -11,7 +12,7 @@
 
 **纯前端 Three.js r160 太阳系 3D 模拟器**，8 大行星 + 月球，**真实 AU 比例轨道**（DIST_SCALE ×16），**零构建**（无 package.json / 无 node_modules），用 `<script type="importmap">` + unpkg CDN 引入依赖，部署在 **Cloudflare Pages**（`https://solarsystem.upstream.eu.cc/`）。
 
-**LOD 系统**：每行星动态阈值 `realSize × 384`（视觉 2px 距离）；远档用 4px sprite dot；近档用原 mesh（带贴图 + 环 + 云层 + label）。**太阳永远 mesh + godrays**（删了 sun LOD 二档切档，避免 sprite 视觉跳变）。
+**LOD 系统**：每行星动态阈值 `realSize × 384`（视觉 2px 距离）；远档用 4px sprite dot；近档用原 mesh（带贴图 + 环 + 云层）。**太阳永远 mesh + godrays**（删了 sun LOD 二档切档，避免 sprite 视觉跳变）。
 
 **太阳辉光**：双层 — `pmndrs/postprocessing` 的 `GodRaysEffect`（screen-space raymarched，从 sun mesh 屏幕坐标辐射光线）+ `BloomEffect`（中心提亮 luminanceThreshold 0.92）。**远日轨道占位亮星**：`makeDistantGlow` 在 D > 4000u 时渲染一颗**屏幕固定 48px** 的暖黄星芒 sprite（`lensflare_processed.png` 用户调好对比度，黑底全透明），木星及之外可见，火星-木星间渐入，内行星带不渲染（保持物理空旷感）。
 
@@ -64,8 +65,8 @@ solar-system/
 │   ├── main.js              # 入口 — async init() 串联所有模块
 │   ├── scene.js             # scene + camera + renderer + OrbitControls + 星空 + 后处理 pipeline（GodRays + Bloom）
 │   ├── lighting.js          # 光照（sunLight PointLight, decay=0 模拟平行光 + ambient）
-│   ├── planets.js           # makeSun / makePlanet (含 LOD) / makeMoon / makeOrbit (椭圆 v20260708) / makeAsteroidBelt (v20260708) / makeTextSprite / makePlanetDot
-│   ├── constants.js         # NASA 数据（PLANETS、MOON、SUN_FACTS、DIST_SCALE=2560、SUN_R=12）
+│   ├── planets.js           # makeSun / makePlanet (含 LOD) / makeMoon (含月球轨道 line) / getOrbitPosition + makeOrbit (JPL 三维椭圆 v20260711, 段数自适应) / makeAsteroidBelt / makePlanetDot
+│   ├── constants.js         # NASA/JPL 数据（PLANETS、MOON、SUN_FACTS、DIST_SCALE=2560、SUN_R=12）
 │   ├── scale.js             # 距离/半径缩放工具
 │   ├── textures.js          # safeTexture 加载器
 │   ├── ui.js                # 全部 UI（slider / toggle / info panel / legend / tracking stop）
@@ -116,7 +117,7 @@ solar-system/
   12. **主循环** `tick()`：
       - deltaReal（相机动画、星空旋转）/ deltaSim（受 speedFactor 影响）
       - **SIM_DAYS_PER_SEC = 1/24 (v20260708 C 方案, 1× = 1 hour/sec)**
-      - 行星公转（椭圆参数公式 r=a(1-e²)/(1+e·cos(θ))）+ 自转 + 地球云层反向旋转
+      - 行星公转（JPL 三维 Keplerian elements：e / I / Ω / ϖ；公式 r=a(1-e²)/(1+e·cosθ) 后转黄道坐标）+ 自转 + 地球云层反向旋转
       - **月球轨道 (v20260708)**:
         - 椭圆: r = a(1-e²)/(1+e·cos(theta)), a=MOON.distance=8, e=MOON.eccentricity=0.0549
         - 月球 mesh 位置每帧重算 moon.mesh.position.x = r (距 pivot 7.56-8.44)
@@ -125,7 +126,7 @@ solar-system/
         - 月球挂 earth.pivot (不是 earth.mesh) — 摆脱 23.44° tilt
       - 太阳自转
       - 星空 uTime + 位置跟随相机
-      - **label 屏幕像素尺寸动态 clamp**（8~24px，4:1 文字比例）
+      - v20260711 删 3D label, 行星名只走图例 + 信息面板
       - **LOD update** + 远档 dot 屏幕 4px scale
       - **distantGlow.update(cameraDistance)** — 远日占位 sprite 按距离 LOD 渐入
       - **小行星带 tick** — 2000 颗 Points 位置每帧重算
@@ -177,11 +178,12 @@ solar-system/
   - 挂到 userData.distantGlow，main.js tick 每帧调 update(cameraDistance)
 
 ### `src/planets.js` — 太阳 + 行星 + 月球 工厂
-- `makeTextSprite(text, color)` — Canvas 渲染文字标签 → Sprite (CanvasTexture)
+- v20260711 删除 `makeTextSprite / addLabel` — 3D 场景不叠加 Sprite 文字标签
 - `addLabel(parent, text, yOffset)` — 挂标签，标记 `userData.isLabel = true`
-- `makeOrbit(distance, eccentricity, perihelion)` — 256 段 LineLoop 椭圆轨道环 (v20260708)
-  - 公式: r(θ) = a(1-e²)/(1+e·cos(θ)), 太阳在焦点
-  - 默认 e=0 时退化为正圆, 8 行星 inclination=0 黄道面对齐
+- `getOrbitPosition(distance, eccentricity, perihelion, inclination, ascendingNode, theta)` — JPL 三维轨道坐标 (v20260711)
+  - 公式: r(θ)=a(1-e²)/(1+e·cosθ)，太阳在焦点；再用 Ω / I / ω=ϖ-Ω 转 J2000 黄道坐标
+  - Three.js 映射: world.x=ecliptic.x, world.z=ecliptic.y, world.y=ecliptic.z
+- `makeOrbit(distance, eccentricity, perihelion, inclination, ascendingNode, color)` — 256 段 LineLoop 三维椭圆轨道环 + 每行星独立颜色
 - `makeAsteroidBelt(distScale)` (v20260708) — 2000 颗 THREE.Points, 2.1-3.3 AU 主带
   - 每颗独立 ecc 0.05-0.2 / perihelion 随机 / inclination ±10°
   - `updateAsteroidBelt(points, elapsedDays)` 每帧重算位置, 固定 opacity 0.7 (LOD 反了已删)
@@ -195,7 +197,7 @@ solar-system/
   - `safeTexture('./src/textures/sun.jpg')`
   - SphereGeometry(1.0, 64, 64) + `MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})`
   - **永远 add mesh 到 scene（删了之前的 sun LOD 二档切档）**
-  - sun label 单独 add 到 scene，不放进 sun mesh 子节点树（避免 godrays 把 label 当光源）
+  - sun label v20260711 已删
   - **v20260707**: 调用 `makeDistantGlow(SUN_R, camera, renderer)` 创建远日占位 sprite，挂到 `userData.distantGlow`
 - `makePlanet(scene, p)`：
   - realSize 几何（地球=1 基准）
@@ -209,7 +211,7 @@ solar-system/
 ### `src/constants.js` — NASA 天文数据
 - `AU = 1`，`DIST_SCALE = 2560`（×16 真实化）
 - `SUN_R = 12.0`
-- `PLANETS[]` — 8 行星（每颗含 distance/realSize/diameterKm/orbit/rotation/tilt/texture/factsZh/factsEn/factZh/factEn）
+- `PLANETS[]` — 8 行星（每颗含 JPL distance/eccentricity/inclination/ascendingNode/perihelion/orbitColor + realSize/diameterKm/orbit/rotation/tilt/texture/factsZh/factsEn/factZh/factEn）
 - `MOON`, `SUN_FACTS`
 
 ### `src/scale.js` — 缩放工具
@@ -229,21 +231,21 @@ solar-system/
 
 ## 4. 关键不变量（事实）
 
-- **基线 commit**：`7134d28`（distantGlow sprite — 远日轨道太阳占位 + 用户调好的星芒贴图）
+- **基线 commit**：`fb04660`（v20260711 JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道 + 天王星 ring 缩）
 | **太阳辉光当前方案**：`GodRaysEffect`（pmndrs 6.36.4，screen-space raymarched，永远启用，无 LOD 切档） |
 | **后处理顺序**：RenderPass → GodRaysEffect → BloomEffect（pmndrs EffectComposer 接管） |
 | **太阳材质**：`MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})` |
 | **distantGlow sprite**：`depthTest:true` + `renderOrder:0`（默认）+ `NormalBlending` + `frustumCulled:false`。**不要** `depthTest:false` + `renderOrder:9999`——会让 distantGlow 被当成 godrays 新光源向四周辐射（v20260708 修复） |
-| **轨道椭圆化 (v20260708)**：`makeOrbit` 用参数公式 r(θ)=a(1-e²)/(1+e·cos(θ))，太阳在焦点; 8 行星 inclination=0 黄道面对齐 (A 方案); 公转用 M≈θ 简化(避免开普勒迭代) |
+| **轨道真实化 (v20260711 工作树)**：8 行星使用 JPL Approximate Positions Table 1 (J2000, 1800-2050) 的 a/e/I/ϖ/Ω；`getOrbitPosition` 先算 r(θ)=a(1-e²)/(1+e·cosθ)，再按 Ω/I/ω=ϖ-Ω 转黄道坐标；轨道线和行星 pivot 同一公式；每颗轨道线使用独立 `orbitColor` |
 | **小行星带 (v20260708)**：2000 颗 THREE.Points, 2.1-3.3 AU, 1 draw call; **固定 opacity 0.7, 无 LOD 渐变** (远档 α 累积反成实心带, 7ebe793 修复) |
 | **时间流速 (v20260708)**：SIM_DAYS_PER_SEC = 1/24, 1× = 1 hour/sec; slider max 125, v=125→1000× (10^(125-50)/25 = 10^3); 1× 看自转, 100-1000× 看公转 |
 - **轨道真实化**：`DIST_SCALE = 2560`（×16），水星距太阳 998 单位 = 83 个太阳直径（真实）
 - **LOD 系统**：
   - 行星：`THREE.LOD`，阈值 = `realSize × 384`（视觉 2px 距离）
   - 远档：4px sprite dot（AdditiveBlending + 行星 color）
-  - 近档：原 mesh（带贴图 + 环 + 云层 + label）
+  - 近档：原 mesh（带贴图 + 环 + 云层）
   - 太阳：单一 mesh（删了 sun LOD，避免 sprite 视觉跳变）
-- **Label 系统**：屏幕像素尺寸动态 clamp [8, 24]px，4:1 文字比例，每帧 tick 算
+- **3D label 系统** | v20260711 已删。行星名 / Sun 名通过图例 (BODIES panel) + 信息面板 (info-panel) 显示；3D 场景不叠加 Sprite 文字标签
 - **相机/控制范围**：camera.far 200000, OrbitControls.maxDistance 200000, zoomSpeed 2.0
 - **Cloudflare Pages 缓存**：HTML no-cache / JS+CSS 1 年 immutable（`_headers`）
 
@@ -257,7 +259,7 @@ solar-system/
 | `3bf5415` | 新增 AGENTS.md |
 | `c317f17` | **辉光基线** — 太阳辉光改用 pmndrs/postprocessing GodRaysEffect |
 | `5e7d278` | **真实化基线** — DIST_SCALE 160→2560（×16），camera 拉远到 (0,1500,3000)，camera.far 200000 |
-| `b24f82d` | **LOD 基线** — 远档 sprite dot（屏幕 24px 初始）+ label 屏幕像素尺寸动态 clamp |
+| `b24f82d` | **LOD 基线** — 远档 sprite dot（屏幕 24px 初始）+ label 屏幕像素尺寸动态 clamp — **v20260711 label 整体删除** |
 | `3e23ac4` | **LOD 优化** — 阈值改成每行星动态 `realSize × 384`，远档 dot 24px→4px，新增太阳 LOD（mesh↔sun dot sprite 切档） |
 | `b1c4a83` | 删太阳 LOD（二档切档 sprite 视觉丑，跟 mesh 跳变），godrays 参数收敛（density 0.94/decay 0.88/exposure 0.40） |
 | `d14d943` | docs: 更新 PROJECT.md 对齐 b1c4a83 基线 |
@@ -268,6 +270,7 @@ solar-system/
 | `1416789` | feat(time): 1× = 1 day/sec (D 方案, 自转/公转比例对齐真实, 地球年 6 分 5 秒) — **已被 b1a5aff 推翻** |
 | `b1a5aff` | feat(time): 1× = 1 hour/sec (C 方案) — 1× = 1 hour/s, 地球自转 24 sec, 公转 4 小时; 旧值 5 day/s → 1 day/s (D) → 1/24 day/s = 1 hour/s (C) |
 | **`12a74aa`** | **当前基线 (v20260708 轨道+时间)** — slider max 100→125, 1000× 触达 (公式 (v-50)/25 不变, v=125 → 10^3 = 1000×); 1000× = 1000 hour/s = 41.7 day/s, 地球年 8.75 秒看完 |
+| **WORKTREE v20260711** | **JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道** — `constants.js` 更新 8 行星 a/e/I/Ω/ϖ 为 JPL Table 1；新增 `orbitColor`；`planets.js` 增加 `getOrbitPosition` 统一轨道线与行星位置；`makeOrbit` 段数自适应 `clamp(round(a/5000×256),256,2048)`；删除 `makeTextSprite/addLabel/sun label`；`makeMoon` 新增 128 段椭圆 line (e=0.0549, 5.145°倾角) 作为 `moonOrbitTilt` 挂到 earth.pivot，色 #48a9ff opacity 0.4；UI 删 `toggle-labels` switch 与字典 `show_labels`。验证：node --check 通过；浏览器 nLabels=0, nOrbits=9, segCounts∈[256,2048], moonOrbit 半径 7.56-8.44 ✓ |
 
 **v20260707 distantGlow 设计过程教训**：
 1. **路线 3（godRaySource 150u 固定 mesh）失败**：world-unit 尺寸跟相机距离不解耦 → 近视角巨大光球
@@ -289,11 +292,10 @@ solar-system/
 ---
 
 ## 6. 待办 / 后续方向
-- Cloudflare Pages 部署：直接 `git push` 触发自动构建（无需任何 build step）— **v20260708 已部署新基线 12a74aa**
+- Cloudflare Pages 部署：直接 `git push` 触发自动构建（无需任何 build step）— **线上仍是 v20260708 基线 12a74aa；v20260711 三维轨道当前只在本地工作树验证，未 push**
 - 远档 dot 当前屏幕 4px，可调（5-8px 让 dot 更明显）
 - 4 个外行星（土/天/海）默认相机下距 > 5000，但阈值 ≤ 4304 应该是 dot —— **确认 LOD 切档对 4 外行星正确**（L1 dot）
 - 如果 godrays 在某些视角（特别是从行星表面看太阳时）出现视觉异常，再调 `density` / `decay` / `samples`
-- label 在远档 dot 时不显示（LOD 切档时 mesh 子节点不可见）—— 这是预期行为
 - 太阳辉光优化：1× 时 `GodRaysEffect` + `BloomEffect` 偏亮，远档需要更柔和的 sun mesh（待评估）
 
 ---
@@ -302,7 +304,7 @@ solar-system/
 
 如果在新会话里读到这个文件：
 
-1. **确认 git 状态**：`git log --oneline -3` 应看到最新 commit 是 `7134d28` 或之后
+1. **确认 git 状态**：先看 `git status --short`；若有 v20260711 工作树改动，重点检查 `src/constants.js / src/planets.js / src/scale.js / src/main.js / PROJECT.md`
 2. **不需要再读所有源码** — 直接基于第 3 节的功能摘要判断要怎么改
 3. **要改某个文件的具体细节**时，再用 read_file 读那一个文件
 4. **新 commit 后**：更新第 5 节的 commit 列表和第 4 节的"基线 commit"

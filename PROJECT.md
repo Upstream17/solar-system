@@ -117,7 +117,12 @@ solar-system/
       - deltaReal（相机动画、星空旋转）/ deltaSim（受 speedFactor 影响）
       - **SIM_DAYS_PER_SEC = 1/24 (v20260708 C 方案, 1× = 1 hour/sec)**
       - 行星公转（椭圆参数公式 r=a(1-e²)/(1+e·cos(θ))）+ 自转 + 地球云层反向旋转
-      - 月球轨道
+      - **月球轨道 (v20260708)**:
+        - 椭圆: r = a(1-e²)/(1+e·cos(theta)), a=MOON.distance=8, e=MOON.eccentricity=0.0549
+        - 月球 mesh 位置每帧重算 moon.mesh.position.x = r (距 pivot 7.56-8.44)
+        - 月球 pivot rotation.y = elapsedDays × wm (wm = 2π/27.3) — 月球公转
+        - 月球 pivot rotation.x = 5.145° (NASA 真实轨道倾角)
+        - 月球挂 earth.pivot (不是 earth.mesh) — 摆脱 23.44° tilt
       - 太阳自转
       - 星空 uTime + 位置跟随相机
       - **label 屏幕像素尺寸动态 clamp**（8~24px，4:1 文字比例）

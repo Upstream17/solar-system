@@ -2,8 +2,8 @@
 
 > **给 AI 助手读的项目索引** — 跨会话续接时，先读这个文件就能掌握当前开发现状，不用重新探索。
 
-> **最后更新**：2026-07-11
-> **基线 commit**：`<NEW>`（v20260711 JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道 + 天王星 ring 缩）— 待 commit 后回填
+> **最后更新**：2026-07-11 (commit & push 已完成)
+> **基线 commit**：`ff5fdda`（v20260711 JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道 + 天王星 ring 缩）
 > **上一基线 commit**：`12a74aa`（v20260708 轨道 + 时间基线 — 椭圆轨道 + 小行星带 + 1× = 1 hour/sec + slider 上限 1000×）
 
 ---
@@ -231,7 +231,7 @@ solar-system/
 
 ## 4. 关键不变量（事实）
 
-- **基线 commit**：`fb04660`（v20260711 JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道 + 天王星 ring 缩）
+- **基线 commit**：`ff5fdda`（v20260711 JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道 + 天王星 ring 缩）
 | **太阳辉光当前方案**：`GodRaysEffect`（pmndrs 6.36.4，screen-space raymarched，永远启用，无 LOD 切档） |
 | **后处理顺序**：RenderPass → GodRaysEffect → BloomEffect（pmndrs EffectComposer 接管） |
 | **太阳材质**：`MeshBasicMaterial({color: 0xfff5d8, toneMapped: false})` |
@@ -269,7 +269,8 @@ solar-system/
 | `7ebe793` | fix(belt): 小行星带 LOD 反了, 删掉 opacity 渐变 — 远档 α 累积反成实心带, 近档累积失效反稀, 固定 opacity 0.7 让 2000 颗自然累积 |
 | `1416789` | feat(time): 1× = 1 day/sec (D 方案, 自转/公转比例对齐真实, 地球年 6 分 5 秒) — **已被 b1a5aff 推翻** |
 | `b1a5aff` | feat(time): 1× = 1 hour/sec (C 方案) — 1× = 1 hour/s, 地球自转 24 sec, 公转 4 小时; 旧值 5 day/s → 1 day/s (D) → 1/24 day/s = 1 hour/s (C) |
-| **`12a74aa`** | **当前基线 (v20260708 轨道+时间)** — slider max 100→125, 1000× 触达 (公式 (v-50)/25 不变, v=125 → 10^3 = 1000×); 1000× = 1000 hour/s = 41.7 day/s, 地球年 8.75 秒看完 |
+| `12a74aa` | **上一基线 (v20260708 轨道+时间)** — slider max 100→125, 1000× 触达 (公式 (v-50)/25 不变, v=125 → 10^3 = 1000×); 1000× = 1000 hour/s = 41.7 day/s, 地球年 8.75 秒看完 |
+| **`ff5fdda`** | **当前基线 (v20260711 轨道+天文+UI)** — 8 行星换用 JPL Table 1 (J2000) a/e/I/ϖ/Ω 实现三维真轨道 + 每行星独立轨道色；`makeOrbit` 段数自适应 clamp(round(a/5000×256),256,2048)；`makeMoon` 新增 128 段椭圆 line (#48a9ff, 5.145°倾角) 作为 `moonOrbitTilt` 挂到 earth.pivot；删 `makeTextSprite/addLabel/sun label` + `toggle-labels` UI；天王星 ring 12.82u → 6.41u；camera 近距抖动用 LOD 8% 迟滞 |
 | **WORKTREE v20260711** | **JPL 三维轨道 + 删 3D label + 段数自适应 + 月球轨道** — `constants.js` 更新 8 行星 a/e/I/Ω/ϖ 为 JPL Table 1；新增 `orbitColor`；`planets.js` 增加 `getOrbitPosition` 统一轨道线与行星位置；`makeOrbit` 段数自适应 `clamp(round(a/5000×256),256,2048)`；删除 `makeTextSprite/addLabel/sun label`；`makeMoon` 新增 128 段椭圆 line (e=0.0549, 5.145°倾角) 作为 `moonOrbitTilt` 挂到 earth.pivot，色 #48a9ff opacity 0.4；UI 删 `toggle-labels` switch 与字典 `show_labels`。验证：node --check 通过；浏览器 nLabels=0, nOrbits=9, segCounts∈[256,2048], moonOrbit 半径 7.56-8.44 ✓ |
 
 **v20260707 distantGlow 设计过程教训**：
@@ -292,7 +293,7 @@ solar-system/
 ---
 
 ## 6. 待办 / 后续方向
-- Cloudflare Pages 部署：直接 `git push` 触发自动构建（无需任何 build step）— **线上仍是 v20260708 基线 12a74aa；v20260711 三维轨道当前只在本地工作树验证，未 push**
+- Cloudflare Pages 部署：直接 `git push` 触发自动构建（无需任何 build step）— **已部署 `ff5fdda` 至 origin/main, Cloudflare Pages 会在下次 webhook 时拉取**
 - 远档 dot 当前屏幕 4px，可调（5-8px 让 dot 更明显）
 - 4 个外行星（土/天/海）默认相机下距 > 5000，但阈值 ≤ 4304 应该是 dot —— **确认 LOD 切档对 4 外行星正确**（L1 dot）
 - 如果 godrays 在某些视角（特别是从行星表面看太阳时）出现视觉异常，再调 `density` / `decay` / `samples`
@@ -308,7 +309,7 @@ solar-system/
 2. **不需要再读所有源码** — 直接基于第 3 节的功能摘要判断要怎么改
 3. **要改某个文件的具体细节**时，再用 read_file 读那一个文件
 4. **新 commit 后**：更新第 5 节的 commit 列表和第 4 节的"基线 commit"
-5. **优先回滚**：`git checkout 7134d28 -- src/` 回到当前基线
+5. **优先回滚到上一基线**：`git checkout 12a74aa -- src/ PROJECT.md index.html` 回到 v20260708 椭圆轨道时间基线
 
 ---
 

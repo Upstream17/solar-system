@@ -197,15 +197,24 @@ export function makeSunGlow(sunR) {
 
 /* 添加太阳直射光（PointLight, decay=0 → 平行光效果）
  * + 环境光（保留暗面细节 + 晨昏线对比）
+ *
+ * v20260708: 还原 PointLight。
+ *   - 月食不走 ShadowMap 方案 (月球 0.273u < shadow map 1 像素 = 98u，物理上不可能工作)。
+ *   - 改走 Shader 数学方案 (B2): 在月球 material.onBeforeCompile 里每帧算"月球到 sun-earth 轴
+ *     的垂直距离"判断本影/半影，改 diffuseColor + 加红色调。
+ *   - PointLight 0xfff5e0 (G2V 真实色温) + decay=0 等效平行光，物理正确。
+ *
  * 返回 { sunLight, ambient }
  */
 export function initLighting(scene) {
   // 适度环境光 + 强太阳直射，晨昏线清晰
+  // 冷蓝 0x8090b0 (大气散射冷调) + 暖白 0xfff5e0 (G2V) 对比
   const ambient = new THREE.AmbientLight(0x8090b0, 0.45);
   scene.add(ambient);
 
   // PointLight distance=0 + decay=0 = 等效平行光（远距离不衰减）
-  const sunLight = new THREE.PointLight(0xffffff, 3.5, 0, 0);
+  // 0xfff5e0 = G2V 真实太阳色温 (5500K 略偏暖白)
+  const sunLight = new THREE.PointLight(0xfff5e0, 3.5, 0, 0);
   sunLight.position.set(0,0,0);
   scene.add(sunLight);
 

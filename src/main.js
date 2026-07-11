@@ -68,7 +68,16 @@ async function init() {
     let moonObj;
     try {
       moonObj = await makeMoon();
-      planetObjs[2].mesh.add(moonObj.pivot);
+      // v20260708-B2-fix: 月球挂到 planetObjs[2].pivot (不是 mesh)
+      //   - mesh 有 tilt.rotation.z = 23.44° (地球自转轴倾角), 月球继承后会偏出黄道面
+      //   - 偏出 ≈ 8 * sin(23.44°) = 3.18 单位, 比本影截面 (1.0) 大很多 → 月球永远不进本影
+      //   - pivot 没有 tilt, 月球绕黄道面内的圆周转 → perpDist 能到 0 → 月食发生
+      planetObjs[2].pivot.add(moonObj.pivot);
+      // v20260708: 月球轨道 5° 倾角 (绕 x 轴倾斜 — 让月球相对黄道面有倾角)
+      // 真实月球轨道相对黄道倾角 5.14°
+      // 月球轨道半径 8 × sin(5°) ≈ 0.70 单位 < 本影半径 1.0 → 月球仍能进本影
+      // v20260708: 月球轨道倾角 5.145° (NASA 真实值, 月球相对黄道面倾角)
+      moonObj.pivot.rotation.x = THREE.MathUtils.degToRad(5.145);
     } catch (e) { console.error('moon failed:', e); }
     window.__moon = moonObj;
 
@@ -219,11 +228,64 @@ async function init() {
       // 月球
       const moon = window.__moon;
       if (moon && window.__planets) {
-        const wm = (Math.PI*2) / MOON.orbit;
-        moon.pivot.rotation.y = elapsedDays * wm;
-        moon.mesh.rotation.y += deltaSim * 0.01;
+      const wm = (Math.PI*2) / MOON.orbit;
+      const moonTheta = elapsedDays * wm;  // 月球轨道平近点角
+      moon.pivot.rotation.y = moonTheta;
+      // v20260708: 月球椭圆轨道 (eccentricity = 0.0549)
+      //   r = a(1-e²) / (1 + e·cos(theta))
+      //   a = MOON.distance = 8, e = 0.0549
+      //   r ∈ [7.56, 8.44] — 真实月球近地点/远地点比
+      const _moonE = MOON.eccentricity || 0;
+      if (_moonE > 0) {
+        const _moonA = MOON.distance;
+        const _moonR = _moonA * (1 - _moonE * _moonE) / (1 + _moonE * Math.cos(moonTheta));
+        moon.mesh.position.set(_moonR, 0, 0);
       }
+      moon.mesh.rotation.y += deltaSim * 0.01;
 
+      // v20260708-B2: 月食 shader uniforms 更新
+      //   — 地球世界位置每帧重算 (公转 + LOD 切档会改 transform)
+      //   — uniforms 写在 material.userData.eclipseUniforms 里 (planets.js L527)
+      //   — 只有月球进了地球本影才会触发 shader 内的本影计算
+      if (moon.mesh.material.userData.eclipseUniforms) {
+      const u = moon.mesh.material.userData.eclipseUniforms;
+      window.__planets[2].lod.getWorldPosition(u.uEarthPos.value);
+      u.uEarthR.value = 1.0;
+
+      // v20260708-B3: debug log 仅在月食时输出 (umbraFactor > 0.1), 每 2 秒一次
+      if (!window.__eclipseDebugFrame) window.__eclipseDebugFrame = 0;
+      window.__eclipseDebugFrame++;
+        const moonWP = new THREE.Vector3();
+        moon.mesh.getWorldPosition(moonWP);
+        const earthWP = u.uEarthPos.value;
+        const _ax = earthWP.x, _ay = earthWP.y, _az = earthWP.z;
+        const _aLen = Math.sqrt(_ax*_ax + _ay*_ay + _az*_az) || 1;
+        const _dx = _ax/_aLen, _dy = _ay/_aLen, _dz = _az/_aLen;
+        const _mx = moonWP.x - earthWP.x;
+        const _my = moonWP.y - earthWP.y;
+        const _mz = moonWP.z - earthWP.z;
+        const _proj = _mx*_dx + _my*_dy + _mz*_dz;
+        const _px = _mx - _proj*_dx;
+        const _py = _my - _proj*_dy;
+        const _pz = _mz - _proj*_dz;
+        const perpDist = Math.sqrt(_px*_px + _py*_py + _pz*_pz);
+        const umbraR = u.uEarthR.value;
+        const umbraFactor = Math.max(0, Math.min(1,
+          1 - Math.max(0, Math.min(1, (perpDist - umbraR*0.8) / (umbraR*1.5 - umbraR*0.8)))
+        ));
+        if (umbraFactor > 0.1 && window.__eclipseDebugFrame % 120 === 0) {
+        console.log('[ECLIPSE]', JSON.stringify({
+          elapsedDays: elapsedDays.toFixed(2),
+          moonWP: [moonWP.x.toFixed(1), moonWP.y.toFixed(1), moonWP.z.toFixed(1)],
+          earthWP: [earthWP.x.toFixed(1), earthWP.y.toFixed(1), earthWP.z.toFixed(1)],
+          projDist: _proj.toFixed(2),
+          perpDist: perpDist.toFixed(3),
+          umbraR: umbraR.toFixed(2),
+          umbraFactor: umbraFactor.toFixed(3),
+          hint: _proj > 0 ? 'moon-on-shadow-side' : 'moon-on-sun-side'
+        }));}
+      }
+    }
       // 小行星带 tick (v20260708)
       //   — 位置每帧重算 (跟行星 tick 一致, 公转周期 ~3-5 年)
       //   — LOD 渐变已移除 (v20260708 修复, 见 planets.js 注释)

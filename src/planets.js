@@ -464,13 +464,106 @@ export async function makePlanet(scene, p) {
   return { pivot, mesh, data:p, lod };
 }
 
-/* ===== 月球 ===== */
+/* ===== 月球 (v20260708-B3: ShaderMaterial 方案) =====
+ * 改用 ShaderMaterial, 完全自己控制 vertex/fragment
+ * - 顶点: 算 worldPos + normal, 写到 varying
+ * - 片段: TEST 阶段直接红色, 验证 shader 跑
+ * 复用: 任何卫星挂同款, tick 传 parent world position
+ */
 export async function makeMoon() {
   const tex = await safeTexture(MOON.texture, 'moon', onLoaderTick);
-  // 几何尺寸 = MOON.size（演示值 0.18，明显小于地球 1.0）
   const geo = new THREE.SphereGeometry(MOON.size, 32, 32);
-  const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:1,
-    emissive: new THREE.Color(0xaaaaaa).multiplyScalar(0.06), emissiveIntensity: 0.08 });
+
+  // uniforms 先建, mat.userData 引用它
+  const eclipseUniforms = {
+    uSunPos:   { value: new THREE.Vector3(0, 0, 0) },
+    uEarthPos: { value: new THREE.Vector3() },
+    uEarthR:   { value: 1.0 },
+  };
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTex:      { value: tex },
+      uSunPos:   eclipseUniforms.uSunPos,
+      uEarthPos: eclipseUniforms.uEarthPos,
+      uEarthR:   eclipseUniforms.uEarthR,
+      uAmbient:  { value: 0.15 },
+    },
+    vertexShader: `
+      varying vec3 vWorldPos;
+      varying vec3 vWorldNormal;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        // v20260708: 用 mat3(modelMatrix) 算 world-space normal
+        //   之前用 normalMatrix (view-space), 跟 sunDir 不在同空间 → Lambert 错
+        vWorldNormal = normalize(mat3(modelMatrix) * normal);
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPos = worldPos.xyz;
+        gl_Position = projectionMatrix * viewMatrix * worldPos;
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D uTex;
+      uniform vec3 uSunPos;
+      uniform vec3 uEarthPos;
+      uniform float uEarthR;
+      uniform float uAmbient;
+      varying vec3 vWorldPos;
+      varying vec3 vWorldNormal;
+      varying vec2 vUv;
+
+      void main() {
+        // 1. 采样月球纹理
+        vec3 albedo = texture2D(uTex, vUv).rgb;
+
+        // 2. 简单 Lambert 光照 (太阳是平行光, 在原点)
+        //   太阳方向 = 从月球指向太阳 (uSunPos - vWorldPos) 然后归一化
+        vec3 lightDir = normalize(uSunPos - vWorldPos);
+        // v20260708: 用 vWorldNormal (跟 lightDir 都在 world space)
+        vec3 N = normalize(vWorldNormal);
+        float NdotL = max(dot(N, lightDir), 0.0);
+
+        // 3. 月球本影/半影计算 (B2 公式, 现在确定在跑)
+        //   axisDir = 太阳→地球 方向 (月食要背向太阳那一侧)
+        vec3 axisDir = normalize(uEarthPos - uSunPos);
+        //   月球到地球向量
+        vec3 moonFromEarth = vWorldPos - uEarthPos;
+        //   月球沿 sun-earth 轴的投影距离 (正=在地球背面=本影侧)
+        float projDist = dot(moonFromEarth, axisDir);
+        //   月球到轴的垂直距离
+        vec3 perpVec = moonFromEarth - projDist * axisDir;
+        float perpDist = length(perpVec);
+        //   本影截面半径 = 地球半径 (月球远, 本影锥近似不变)
+        float umbraR = uEarthR * 1.0;
+        //   本影因子: perpDist < umbraR → 1.0, perpDist > umbraR*1.5 → 0.0
+        float umbraFactor = 1.0 - smoothstep(umbraR * 0.8, umbraR * 1.5, perpDist);
+        //   限制只在 projDist > 0 (月球在地球背面=本影侧) 时才生效
+        umbraFactor *= step(0.0, projDist);
+        //   半影因子: 本影外渐变
+        float penumbraFactor = 1.0 - smoothstep(umbraR * 1.5, umbraR * 2.5, perpDist);
+        penumbraFactor *= step(0.0, projDist);
+        penumbraFactor *= (1.0 - umbraFactor);
+
+        // 4. 光照 (Lambert + ambient)
+        //   本影区: 光照被遮挡 → 极暗 (0.04 亮度, 只剩 ambient)
+        //   半影区: 光照减半
+        //   正常区: 标准 Lambert + ambient
+        // v20260708: 用户原话"变红其实不对, 只保留黑白变化" — 去掉色调, 只调亮度
+        float lightMult = NdotL * (1.0 - umbraFactor) * (1.0 - penumbraFactor * 0.5);
+        lightMult += uAmbient;
+        // 本影区压暗到 0.04 (几乎黑, 模拟地球本影完全挡光)
+        lightMult *= mix(1.0, 0.04, umbraFactor);
+        vec3 finalColor = albedo * lightMult;
+
+        gl_FragColor = vec4(finalColor, 1.0);
+      }
+    `,
+  });
+
+  // 让 main.js tick 能找到 uniforms
+  mat.userData.eclipseUniforms = eclipseUniforms;
+
   const mesh = new THREE.Mesh(geo, mat);
   mesh.userData = { isPlanet:true, data:MOON, name:MOON.name, en:MOON.en, typeZh:MOON.typeZh, typeEn:MOON.typeEn };
 

@@ -160,6 +160,12 @@ export const MOON = {
   name:'月球', en:'Moon', parent:'地球',
   distance:8.0, size:0.25, realSize:0.273, diameterKm:3474,
   orbit:27.3, rotation:27.3,
+  // v20260708: 月球轨道偏心率 (NASA: 0.0549)
+  //   真实月球距地球 363,300 km (近地点) 到 405,500 km (远地点)
+  //   演示值: r = 8.0 × (1 - 0.0549²) / (1 + 0.0549 × cos(theta))
+  //          r ∈ [7.56, 8.44] (相对单位)
+  //   main.js tick 里每帧用这个公式算 r
+  eccentricity:0.0549,
   texture:'./src/textures/moon.jpg',
   typeZh:'地球的天然卫星',
   typeEn:'Earth\'s Natural Satellite',

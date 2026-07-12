@@ -576,14 +576,17 @@ export async function makeMoon(moonData) {
       varying vec2 vUv;
 
       void main() {
-        // 1. 采样卫星纹理 + 色调混合 (tint 给每个卫星一点颜色感)
-        vec3 albedo = texture2D(uTex, vUv).rgb;
-        albedo = mix(albedo, albedo * uTint, 0.25);  // 25% tint 混合
+              // 1. 采样卫星纹理 (NASA 真实贴图自带正确色彩)
+              //   v20260712b: 不再 tint 覆盖,真实贴图 (Io 橙黄/Europa 白冰/Titan 橙雾) 自身已有正确色彩
+              //   tint uniform 仍保留以便某些无贴图场景 (e.g. 未来程序化贴图) 调色用
+              vec3 albedo = texture2D(uTex, vUv).rgb;
+              // v20260712b: tint 改为 0% 覆盖 (real textures carry their own color)
+              // 保留代码以便 fallback / 调试: albedo = mix(albedo, albedo * uTint, 0.0);
 
-        // 2. 简单 Lambert 光照 (太阳是平行光, 在原点)
-        vec3 lightDir = normalize(uSunPos - vWorldPos);
-        vec3 N = normalize(vWorldNormal);
-        float NdotL = max(dot(N, lightDir), 0.0);
+              // 2. 简单 Lambert 光照 (太阳是平行光, 在原点)
+              vec3 lightDir = normalize(uSunPos - vWorldPos);
+              vec3 N = normalize(vWorldNormal);
+              float NdotL = max(dot(N, lightDir), 0.0);
 
         // 3. 月食/本影/半影计算 — 当卫星进入母行星本影时
         //   axisDir = 太阳→母行星 方向

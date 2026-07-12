@@ -409,20 +409,44 @@ export async function makeSun(scene, camera, renderer) {
     return mesh;
   }
 
-/* ===== 行星 ===== */
+/* ===== 行星 =====
+ * v20260712c 优化: 所有 safeTexture 调用并行启动 (Promise.all),不再 4-层 await 串行
+ *   旧版每个行星 tex→bump→ring→clouds 串行等,8 行星 × 4 纹理 + 19 卫星串行 = ~80 次 HTTP 等
+ *   新版: 同时启动所有 30+ 个纹理请求,浏览器并发 6/host,等最慢的即可
+ */
 export async function makePlanet(scene, p) {
   // 行星名 → 程序化纹理名
   const texName = { '水星':'mercury', '金星':'venus', '地球':'earth', '火星':'mars',
                     '木星':'jupiter', '土星':'saturn', '天王星':'uranus', '海王星':'neptune' }[p.name] || 'earth';
-  const tex = await safeTexture(p.texture, texName, onLoaderTick);
+  // v20260712c: 并行加载所有纹理 (主图 + bump + ring + clouds)
+  const texPromises = [
+    safeTexture(p.texture, texName, onLoaderTick)
+  ];
+  if (p.bumpMap) texPromises.push(safeTexture(p.bumpMap, texName, onLoaderTick));
+  let ringPromiseIdx = -1;
+  if (p.ringTexture) {
+    ringPromiseIdx = texPromises.length;
+    texPromises.push(safeTexture(p.ringTexture, p.name === '土星' ? 'saturn_ring' : 'uranus_ring', onLoaderTick));
+  }
+  let cloudsPromiseIdx = -1;
+  if (p.cloudsTexture) {
+    cloudsPromiseIdx = texPromises.length;
+    texPromises.push(safeTexture(p.cloudsTexture, 'earth_clouds', onLoaderTick));
+  }
+  // 同时等待所有
+  const texResults = await Promise.all(texPromises);
+  const tex = texResults[0];
+  const bump = p.bumpMap ? texResults[1] : null;
+  const ringMap = (p.ringTexture && ringPromiseIdx >= 0) ? texResults[ringPromiseIdx] : null;
+  const cloudsTex = (p.cloudsTexture && cloudsPromiseIdx >= 0) ? texResults[cloudsPromiseIdx] : null;
+
   // 几何尺寸 = realSize（地球 = 1.0），与真实比例一致
   const geo = new THREE.SphereGeometry(p.realSize, 48, 48);
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:0.85, metalness:0.05,
     emissive: new THREE.Color(p.color).multiplyScalar(0.04),
     emissiveIntensity: 0.05
   });
-  if (p.bumpMap) {
-    const bump = await safeTexture(p.bumpMap, texName, onLoaderTick);
+  if (bump) {
     mat.bumpMap = bump;
     mat.bumpScale = 0.04;
   }
@@ -465,11 +489,6 @@ export async function makePlanet(scene, p) {
       const x = pos.getX(i), y = pos.getY(i);
       uv.setXY(i, (Math.sqrt(x*x+y*y) - ringInner) / (ringOuter - ringInner), 0.5);
     }
-    // 有 ringTexture 用贴图；没有 fallback 纯色（向后兼容）
-    let ringMap = null;
-    if (p.ringTexture) {
-      ringMap = await safeTexture(p.ringTexture, p.name === '土星' ? 'saturn_ring' : 'uranus_ring', onLoaderTick);
-    }
     const ringMat = new THREE.MeshBasicMaterial({
       map: ringMap || null,
       color: ringMap ? 0xffffff : (p.ringColor||0xc9b896),
@@ -484,8 +503,7 @@ export async function makePlanet(scene, p) {
 
   // 地球云层（独立 sprite — 降透明度 + noise displacement 避免塑料贴图感）
   // 关键：opacity 0.55 → 0.35（与海陆融合），displacement 让云朵有"凸起感"而非平贴
-  if (p.cloudsTexture) {
-    const cloudsTex = await safeTexture(p.cloudsTexture, 'earth_clouds', onLoaderTick);
+  if (cloudsTex) {
     const cloudsGeo = new THREE.SphereGeometry(p.realSize * 1.018, 64, 64);
     // 顶点 displacement — 用噪声让云层表面起伏（凸起的云团比平贴真实）
     const posAttr = cloudsGeo.attributes.position;

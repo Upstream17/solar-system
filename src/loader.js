@@ -4,11 +4,14 @@
  *   1. 页面 HTML 里放 #loader overlay（隐藏）
  *   2. main.js 在 import 完 Three.js 后立刻调 Loader.show()
  *   3. safeTexture 通过 Loader.tick(label, delta) 报告进度（0-1）
- *   4. total = 9 个纹理（太阳 + 8 行星），月亮复用 makeMercuryTex 算 1 个共 10
+ *   4. total = 实际纹理数 (sun 1 + 行星主图 8 + earth_normal/clouds 2 + 土星/天王星环 2 + 月球 1 + 新卫星 19 = 33)
  *   5. 全部 done → main.js 调 Loader.hide() → 启动 3D scene
+ *
+ * v20260712c: 修复进度条卡 100% 问题 — 之前 TOTAL_ASSETS=11 硬编码, 现在 20 颗卫星 = 33 张图,
+ *   进度条要等全部 33 张都完成才到 100%, 否则显示"还在准备中"用户以为页面挂了
  */
 
-const TOTAL_ASSETS = 11; // sun + mercury + venus + earth + earth_normal + earth_clouds + mars + jupiter + saturn + (saturn_ring + uranus_ring) + moon
+const TOTAL_ASSETS = 33; // sun(1) + 行星主图(8) + earth_normal/clouds(2) + saturn_ring + uranus_ring(2) + earth moon(1) + 19 新卫星
 let _done = 0;
 let _labels = new Set();
 

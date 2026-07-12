@@ -54,57 +54,57 @@ async function init() {
     // — GodRaysEffect 需要 sun mesh 作为 lightSource，从 sun 屏幕坐标辐射光线
     setSunMesh(sun);
 
-    // 4. 行星
-        const planetObjs = [];
-        for (const p of PLANETS) {
-          try {
-            const obj = await makePlanet(scene, p);
-            planetObjs.push(obj);
-          } catch (e) { console.error('planet failed:', p.name, e); }
-        }
+    // 4. 行星 (v20260712c: 并行创建所有行星 — 9 个 HTTP 请求同时启动,不再顺序等)
+        //   旧版: for 循环串行 await, 9 行星 × ~4 纹理串行 = 36 次 HTTP 等
+        //   新版: Promise.all 同时创建, 浏览器并发 6/host, 等最慢的即可
+        const planetObjs = await Promise.all(PLANETS.map(async (p) => {
+          try { return await makePlanet(scene, p); }
+          catch (e) { console.error('planet failed:', p.name, e); return null; }
+        })).then(arr => arr.filter(Boolean));
         window.__planets = planetObjs;
 
         // 5. 卫星系统 (v20260712: 扩展到所有行星的主要卫星)
-        //   思路:
-        //   - 遍历 MOONS[],对每颗调用 makeMoon(moonData) → 返回 { pivot, mesh, data, moonOrbitTilt }
-        //   - 找到其母行星 (data.parent 对应的 planetObj),挂到 planetObj.pivot (不是 mesh,免受自转轴倾角影响)
-        //   - 收集到 __allMoons[] 供 legend / click / tick 使用
-        const allMoons = [];
-        // 地球月球走 MOON 单例 (它不在 MOONS[] 中,因为 parent='地球' 且 schema 略不同)
-        try {
-          const moonObj = await makeMoon(MOON);
-          const earthIdx = PLANETS.findIndex(p => p.name === '地球');
-          if (earthIdx >= 0 && planetObjs[earthIdx]) {
-            planetObjs[earthIdx].pivot.add(moonObj.pivot);
-            planetObjs[earthIdx].pivot.add(moonObj.moonOrbitTilt);
-          }
-          // v20260712: 月球轨道倾角由 makeMoon 内部的 pivot.rotation.x 设置 (5.145°)
-                // v20260708: 月球轨道倾角 (绕 x 轴倾斜 — 让月球相对黄道面有倾角)
-                // moon.pivot.rotation.x = THREE.MathUtils.degToRad(MOON.inclination || 5.145);  // 移到 makeMoon 里
-                moonObj.parentPlanet = '地球';
-                moonObj.parentIdx = earthIdx;
-                allMoons.push(moonObj);
-                window.__moon = moonObj;  // backward compat
-        } catch (e) { console.error('earth moon failed:', e); }
+        // 5. 卫星系统 (v20260712: 扩展到所有行星的主要卫星)
+            //   思路:
+            //   - 遍历 MOONS[],对每颗调用 makeMoon(moonData) → 返回 { pivot, mesh, data, moonOrbitTilt }
+            //   - 找到其母行星 (data.parent 对应的 planetObj),挂到 planetObj.pivot (不是 mesh,免受自转轴倾角影响)
+            //   - 收集到 __allMoons[] 供 legend / click / tick 使用
+            //   v20260712c: 并行创建 19 颗卫星 (Promise.all),不再顺序等
+            const allMoons = [];
+            // 地球月球走 MOON 单例 (它不在 MOONS[] 中,因为 parent='地球' 且 schema 略不同)
+            try {
+              const moonObj = await makeMoon(MOON);
+              const earthIdx = PLANETS.findIndex(p => p.name === '地球');
+              if (earthIdx >= 0 && planetObjs[earthIdx]) {
+                planetObjs[earthIdx].pivot.add(moonObj.pivot);
+                planetObjs[earthIdx].pivot.add(moonObj.moonOrbitTilt);
+              }
+              // v20260708: 月球轨道倾角由 makeMoon 内部的 pivot.rotation.x 设置 (5.145°)
+              moonObj.parentPlanet = '地球';
+              moonObj.parentIdx = earthIdx;
+              allMoons.push(moonObj);
+              window.__moon = moonObj;  // backward compat
+            } catch (e) { console.error('earth moon failed:', e); }
 
-        // 5.5 其他 19 颗卫星 (火星2 + 木星5 + 土星6 + 天王星5 + 海王星1)
-        for (const mData of MOONS) {
-          try {
-            const moonObj = await makeMoon(mData);
-            const parentIdx = PLANETS.findIndex(p => p.name === mData.parent);
-            if (parentIdx < 0 || !planetObjs[parentIdx]) {
-              console.warn('moon parent not found:', mData.name, '→', mData.parent);
-              continue;
-            }
-            planetObjs[parentIdx].pivot.add(moonObj.pivot);
-            planetObjs[parentIdx].pivot.add(moonObj.moonOrbitTilt);
-            moonObj.parentPlanet = mData.parent;
-            moonObj.parentIdx = parentIdx;
-            allMoons.push(moonObj);
-          } catch (e) { console.error('moon failed:', mData.name, e); }
-        }
-        window.__allMoons = allMoons;
-        console.log(`[INIT] Loaded ${allMoons.length} moons total (1 earth moon + ${MOONS.length} others)`);
+            // 5.5 其他 19 颗卫星 (火星2 + 木星5 + 土星6 + 天王星5 + 海王星1) — 并行
+            const moonResults = await Promise.all(MOONS.map(async (mData) => {
+              try {
+                const moonObj = await makeMoon(mData);
+                const parentIdx = PLANETS.findIndex(p => p.name === mData.parent);
+                if (parentIdx < 0 || !planetObjs[parentIdx]) {
+                  console.warn('moon parent not found:', mData.name, '→', mData.parent);
+                  return null;
+                }
+                planetObjs[parentIdx].pivot.add(moonObj.pivot);
+                planetObjs[parentIdx].pivot.add(moonObj.moonOrbitTilt);
+                moonObj.parentPlanet = mData.parent;
+                moonObj.parentIdx = parentIdx;
+                return moonObj;
+              } catch (e) { console.error('moon failed:', mData.name, e); return null; }
+            }));
+            moonResults.filter(Boolean).forEach(m => allMoons.push(m));
+            window.__allMoons = allMoons;
+            console.log(`[INIT] Loaded ${allMoons.length} moons total (1 earth moon + ${MOONS.length} others)`);
 
         // 5.6 小行星带 (v20260708) — 2000 颗 Points, 火星-木星之间
     //   — 放在月亮之后, 行星 tick 之前 (跟 planets 平级, scene 顶层)

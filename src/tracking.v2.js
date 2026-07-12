@@ -55,15 +55,27 @@ function pinchDistance(touches) {
   return Math.hypot(dx, dy);
 }
 
-/* 用与 wheel 一样的 min/max 范围, 应用一次缩放 — scale > 1 拉远, < 1 拉近 */
+/* 用与 wheel 一样的 min/max 范围, 应用一次缩放 — scale > 1 拉远, < 1 拉近
+ * v20260712d: 重写缩放策略 — 修复 Phobos/Deimos 无法缩放 bug
+ *   旧逻辑: maxR = targetR * 50 (对称缩放) → Phobos(targetR=0.04) maxR=2, 困死
+ *   新逻辑: 只限制最小缩放距离 (zoom-IN 防止穿模), 不限制最大缩放距离 (zoom-OUT 无上限)
+ *   maxR 取 camera.far 限制 (200000), 让用户能缩到太阳系全景
+ *   同时对月球类小目标用更大的最小倍率 (2× radius 而不是 1.2×) 防止初始就完全嵌入
+ */
 function applyZoomScale(scale) {
   _spherical.radius *= scale;
-  // 缩放范围基于目标行星半径 (与 onWheel 一致)
+  // 缩放范围 — 只设最小 (zoom-IN 上限 = max magnification)
   const targetR = focusTarget.userData.isSun
     ? getSunDisplayRadius()
     : getPlanetDisplayRadius(focusTarget.userData.data);
-  const minR = Math.max(targetR * 1.2, 0.3);
-  const maxR = targetR * 50;
+  // 最小缩放距离: 行星类 1.2×, 太阳类 2.0×, 月球/卫星类 3.0× (避免嵌入)
+  const minMultiplier = focusTarget.userData.isSun ? 2.0
+                       : (focusTarget.userData.data?.parent) ? 3.0  // 卫星
+                       : 1.2;                                        // 行星
+  const minR = Math.max(targetR * minMultiplier, 0.5);
+  // 最大缩放距离: 拉到场景远裁面 (camera.far = 200000) — 不再受行星大小限制
+  const _cam = window.__camera;
+  const maxR = _cam?.far ? Math.min(_cam.far * 0.95, 200000) : 200000;
   _spherical.radius = Math.max(minR, Math.min(maxR, _spherical.radius));
 }
 
@@ -230,8 +242,14 @@ function focusOn(mesh) {
     ? getSunDisplayRadius()
     : getPlanetDisplayRadius(mesh.userData.data);
 
-  // 相机距离 = 行星半径 × 4-6 倍（让用户能看清全行星，但保持合适的观察距离）
-  const offset = Math.max(displayR * 4, 5);
+  // 相机距离 = 行星半径 × 缩放系数 (目标: 飞过去时看得到清晰表面)
+    // v20260712d: 区分行星 vs 卫星 — 卫星用更大倍率 (防止相机离卫星过近)
+    //   行星: displayR × 4 (如 Jupiter 半径 11.21 → 飞过去 44.84)
+    //   卫星: max(displayR × 6, 1.5) (如 Phobos 半径 0.04 → 飞过去 1.5 而不是 0.24)
+    const isMoon = !mesh.userData.isSun && mesh.userData.data?.parent;
+    const offset = isMoon
+      ? Math.max(displayR * 6, 1.5)
+      : Math.max(displayR * 4, 5);
   const target = wp.clone().add(new THREE.Vector3(offset, offset * 0.4, offset * 0.7));
   animateCamera(target, wp, offset);
 }

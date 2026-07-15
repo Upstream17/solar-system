@@ -117,7 +117,7 @@ export const PLANETS = [
     inclination:2.48599187, ascendingNode:113.66242448, perihelion:92.59887831,
     orbitColor:0xe6d58a,
     texture:'./src/textures/saturn.jpg',
-    ringTexture:'./src/textures/saturn_ring.jpg',
+    ringTexture:'./src/textures/saturn_ring.png',
     ring:true,
     ringInner:1.24, ringOuter:2.34,
     typeZh:'气态巨行星 · 带环行星',

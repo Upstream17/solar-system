@@ -478,9 +478,12 @@ export async function makePlanet(scene, p) {
   pivot.position.set(Math.cos(theta0)*a, 0, Math.sin(theta0)*a);
   scene.add(pivot);
 
-  // 土星/天王星环
+  // 土星/天王星环 (v20260715: alpha 贴图支持)
+  //   - ringInner 用 p.ringInner 让 constants.js 里 NASA 真实比例生效 (之前 hardcode 1.4 忽略了 p.ringInner)
+  //   - alphaTest=0.5 让 SSS 2k saturn_ring_alpha.png 的空隙像素真正丢弃
+  //     (老 saturn_ring.jpg 没 alpha 通道 → alphaTest 全部通过, 行为不变)
   if (p.ring) {
-    const ringInner = p.realSize*1.4;
+    const ringInner = p.realSize*(p.ringInner||1.4);
     const ringOuter = p.realSize*(p.ringOuter||2.2);
     const ringGeo = new THREE.RingGeometry(ringInner, ringOuter, 96);
     const pos = ringGeo.attributes.position;
@@ -494,7 +497,8 @@ export async function makePlanet(scene, p) {
       color: ringMap ? 0xffffff : (p.ringColor||0xc9b896),
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.85
+      opacity: 0.85,
+      alphaTest: 0.5,    // alpha<0.5 丢弃 — 对 SSS RGBA 必须, 对老 RGB no-op
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = Math.PI/2;
